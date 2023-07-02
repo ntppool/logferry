@@ -80,18 +80,18 @@ nfpms:
     #     dependencies:
     #       - "ntp | chrony"
 
-    # contents:
-    #   - src: "scripts/ntppool-monitor@.service"
-    #     dst: "/etc/systemd/system/ntppool-monitor@.service"
+    contents:
+      - src: "scripts/logferry.service"
+        dst: "/etc/systemd/system/logferry.service"
 
-    #   - src: "scripts/defaults"
-    #     dst: "/etc/default/ntppool-monitor.sample"
-    #     type: config
+      - src: "scripts/defaults"
+        dst: "/etc/default/logferry.sample"
+        type: config
 
-    #   - src: "scripts/defaults"
-    #     dst: "/etc/default/ntppool-monitor"
-    #     type: config|noreplace
+      - src: "scripts/defaults"
+        dst: "/etc/default/logferry"
+        type: config|noreplace
 
-    # scripts:
-    #   preinstall: scripts/preinstall.sh
-    #   postinstall: scripts/postinstall.sh
+    scripts:
+      preinstall: scripts/preinstall.sh
+      postinstall: scripts/postinstall.sh

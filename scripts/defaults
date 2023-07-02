@@ -1,0 +1,4 @@
+LOGFERRY_CERT=/etc/tls/server.crt
+LOGFERRY_KEY=/etc/tls/server.key
+LOGFERRY_UPSTREAM=
+LOGFERRY_PATH=/var/log/geodns/avro

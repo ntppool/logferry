@@ -3,6 +3,7 @@ module go.ntppool.org/logferry
 go 1.20
 
 require (
+	github.com/BoRuDar/configuration/v4 v4.2.2
 	github.com/abh/geodns/v3 v3.2.4-0.20230704234921-3d0eaedbe499
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/hamba/avro/v2 v2.12.0

@@ -1,3 +1,5 @@
+github.com/BoRuDar/configuration/v4 v4.2.2 h1:WdfaEojEbQkQF74+mW4wv15PqS37mAqvEyzBC4knu/o=
+github.com/BoRuDar/configuration/v4 v4.2.2/go.mod h1:cqpHiIaJQnNEK4rLReWkBZTv2CyJqH8KMfq5HZsQGVg=
 github.com/abh/certman v0.4.0 h1:XHoDtb0YyRQPclaHMrBDlKTVZpNjTK6vhB0S3Bd/Sbs=
 github.com/abh/certman v0.4.0/go.mod h1:x8QhpKVZifmV1Hdiwdg9gLo2GMPAxezz1s3zrVnPs+I=
 github.com/abh/geodns/v3 v3.2.4-0.20230704234921-3d0eaedbe499 h1:sB6iVkeevtzbWjiA1UHp8APsoca2szm3rAfFIo2Xhsw=
@@ -65,8 +67,6 @@ github.com/xdg-go/scram v1.1.2/go.mod h1:RT/sEzTbU5y00aCK8UOx6R7YryM0iF1N2MOmC3k
 github.com/xdg-go/stringprep v1.0.4 h1:XLI/Ng3O1Atzq0oBs3TWm+5ZVgkq2aqdlvP9JtoZ6c8=
 github.com/xdg-go/stringprep v1.0.4/go.mod h1:mPGuuIYwz7CmR2bT9j4GbQqutWS1zV24gijq1dTyGkM=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
-go.ntppool.org/common v0.0.1 h1:amXcozR4+9d+sJsnn9IjJ1GdoLZ2ymxsdbtduGQvPNo=
-go.ntppool.org/common v0.0.1/go.mod h1:y59FCLHuAy3He+nQyEeS8HBDUm63kzshWTq+wv//Rgc=
 go.ntppool.org/common v0.0.2-0.20230703062258-bb99ca584394 h1:2ujE56ceLvFm/efiM/8eVPz4VNrlP6Kt8am2TzxFKGA=
 go.ntppool.org/common v0.0.2-0.20230703062258-bb99ca584394/go.mod h1:y59FCLHuAy3He+nQyEeS8HBDUm63kzshWTq+wv//Rgc=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=

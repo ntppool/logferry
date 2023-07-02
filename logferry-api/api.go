@@ -31,9 +31,15 @@ func main() {
 		log.Info("shutting down")
 	}()
 
+	conf, err := LoadConfig()
+	if err != nil {
+		log.Error("config", "err", err)
+		os.Exit(2)
+	}
+
 	apisrv := &APIServer{}
 
-	err := apisrv.run(ctx)
+	err = apisrv.run(ctx, conf)
 	if err != nil {
 		logger.Setup().Error("server error", "err", err)
 	}
@@ -41,7 +47,7 @@ func main() {
 	cancel()
 }
 
-func (apisrv *APIServer) run(ctx context.Context) error {
+func (apisrv *APIServer) run(ctx context.Context, conf Config) error {
 	log := logger.Setup()
 
 	log.Info("Starting labstack")

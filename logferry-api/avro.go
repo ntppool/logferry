@@ -36,6 +36,7 @@ func postAvro(kaf *kafconn.Kafka) func(c echo.Context) error {
 			log.Error("could not get kafka writer", "err", err)
 			return c.NoContent(http.StatusInternalServerError)
 		}
+		writer.Logger = nil
 
 		dec, err := ocf.NewDecoder(c.Request().Body)
 		if err != nil {
