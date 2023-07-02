@@ -1,0 +1,31 @@
+#!/bin/bash
+
+BUILD=$1
+DIR=$2
+
+set -euo pipefail
+
+if [ -z "$DIR" ]; then
+  echo run with $0 BUILD_NUMBER DIR
+  exit 2
+fi
+
+mkdir -p $DIR
+
+BASE=https://geodns.bitnames.com/logferry/builds/$BUILD
+
+files=`curl -sSf $BASE/checksums.txt | awk '{print $2}'`
+metafiles="checksums.txt metadata.json CHANGELOG.md artifacts.json"
+
+for f in $metafiles; do
+  url=$BASE/$f
+  echo downloading $url
+  curl --remove-on-error -sSfRo $DIR/$f $url || true
+done
+
+
+for f in $files; do
+  url=$BASE/$f
+  echo downloading $url
+  curl --remove-on-error -sSfRo $DIR/$f $url
+done
