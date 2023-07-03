@@ -9,7 +9,7 @@ require (
 	github.com/hamba/avro/v2 v2.12.0
 	github.com/labstack/echo/v4 v4.10.2
 	github.com/segmentio/kafka-go v0.4.40
-	go.ntppool.org/common v0.0.2-0.20230703062258-bb99ca584394
+	go.ntppool.org/common v0.0.2-0.20230703064905-ab579128b94a
 	golang.org/x/exp v0.0.0-20230626212559-97b1e661b5df
 )
 

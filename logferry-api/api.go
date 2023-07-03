@@ -12,6 +12,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 
 	"go.ntppool.org/common/apitls"
+	"go.ntppool.org/common/health"
 	kafconn "go.ntppool.org/common/kafka"
 	"go.ntppool.org/common/logger"
 )
@@ -38,6 +39,8 @@ func main() {
 	}
 
 	apisrv := &APIServer{}
+
+	go health.HealthCheckListener(ctx, 4280, log.WithGroup("health"))
 
 	err = apisrv.run(ctx, conf)
 	if err != nil {
