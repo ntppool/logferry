@@ -29,6 +29,11 @@ func postAvro(kaf *kafconn.Kafka) func(c echo.Context) error {
 		log := logger.Setup()
 
 		hostname := ctx.Value(CertificateKey).(string)
+
+		if len(hostname) == 0 {
+			return c.NoContent(http.StatusUnauthorized)
+		}
+
 		log = log.With("host", hostname)
 
 		writer, err := kaf.NewWriter("geodns-avro")

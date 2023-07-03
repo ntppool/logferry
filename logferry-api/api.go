@@ -68,7 +68,6 @@ func (apisrv *APIServer) run(ctx context.Context, conf Config) error {
 	e := echo.New()
 
 	// e.Use(slogecho.New(log.WithGroup("api")))
-	e.Use(apisrv.certificateMiddleware)
 	e.Use(middleware.Recover())
 
 	// Routes
@@ -85,15 +84,17 @@ func (apisrv *APIServer) run(ctx context.Context, conf Config) error {
 		return err
 	}
 
-	e.POST("/api/v1/geodns/avro", postAvro(kaf))
+	apiEcho := e.Group("/api/v1", apisrv.certificateMiddleware)
+	apiEcho.POST("/geodns/avro", postAvro(kaf))
 
 	hsrv := http.Server{
 		Addr:    ":4200",
 		Handler: e,
 		TLSConfig: &tls.Config{
-			MinVersion:            tls.VersionTLS12,
-			ClientCAs:             caCertPool,
-			ClientAuth:            tls.RequireAndVerifyClientCert,
+			MinVersion: tls.VersionTLS12,
+			ClientCAs:  caCertPool,
+			// ClientAuth:            tls.RequireAndVerifyClientCert,
+			ClientAuth:            tls.VerifyClientCertIfGiven,
 			GetCertificate:        cm.GetCertificate,
 			VerifyPeerCertificate: apisrv.verifyClient,
 		},
