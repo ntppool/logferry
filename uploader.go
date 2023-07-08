@@ -100,17 +100,36 @@ func uploader(ctx context.Context, client *http.Client, logpath, apiURL string, 
 	}
 
 	g.Go(func() error {
-		for _, fi := range dir {
-			files := []string{}
-			if isAvroFileName(fi.Name()) {
-				files = append(files, fi.Name())
+		first := true
+		for {
+			for _, fi := range dir {
+				files := []string{}
+				if isAvroFileName(fi.Name()) {
+					files = append(files, fi.Name())
+				}
+				slices.Sort(files)
+				for _, n := range files {
+					ok := first || len(processCh) < 10
+					if !ok {
+						select {
+						case <-ctx.Done():
+							return nil
+						case <-time.After(2 * time.Second):
+							// just slow down a bit if we are retrying
+						}
+					}
+					processCh <- path.Join(logpath, n)
+				}
 			}
-			slices.Sort(files)
-			for _, n := range files {
-				processCh <- path.Join(logpath, n)
+
+			first = false
+
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(5 * time.Minute):
 			}
 		}
-		return nil
 	})
 
 	uploadOkCounter := prometheus.NewCounter(prometheus.CounterOpts{

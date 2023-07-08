@@ -27,6 +27,8 @@ func httpClient(cm apitls.CertificateProvider) (*http.Client, error) {
 			InsecureSkipVerify:   false,
 			GetClientCertificate: cm.GetClientCertificate,
 			RootCAs:              capool,
+			MinVersion:           tls.VersionTLS12,
+			// MaxVersion:           tls.VersionTLS13,
 		}
 
 		// tlsConfig.BuildNameToCertificate()
