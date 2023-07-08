@@ -7,14 +7,16 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.ntppool.org/common/logger"
 	"golang.org/x/exp/slices"
 	"golang.org/x/sync/errgroup"
 )
 
-func uploader(ctx context.Context, client *http.Client, logpath, apiURL string) error {
+func uploader(ctx context.Context, client *http.Client, logpath, apiURL string, metrics prometheus.Registerer) error {
 
 	log := logger.Setup()
 
@@ -24,15 +26,46 @@ func uploader(ctx context.Context, client *http.Client, logpath, apiURL string) 
 	}
 	defer watcher.Close()
 
+	g, ctx := errgroup.WithContext(ctx)
+
 	// todo: detect if the list is full and rescan directory
 	processCh := make(chan string, 10000)
 
-	go func() {
+	metrics.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "queue_internal_count",
+		Help: "Files in the internal queue to be processed",
+	}, func() float64 {
+		size := len(processCh)
+		return float64(size)
+	}))
+
+	metrics.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "queue_disk_count",
+		Help: "Files in the disk queue to be processed",
+	}, func() float64 {
+		dir, err := os.ReadDir(logpath)
+		if err != nil {
+			return -1
+		}
+		count := 0
+
+		for _, fi := range dir {
+			if isAvroFileName(fi.Name()) {
+				count++
+			}
+		}
+		return float64(count)
+	}))
+
+	g.Go(func() error {
 		for {
 			select {
+			case <-ctx.Done():
+				log.Info("fswatcher shutting down")
+				return nil
 			case event, ok := <-watcher.Events:
 				if !ok {
-					return
+					return fmt.Errorf("got not ok event")
 				}
 				// log.Info("event info", "event", event)
 				// if event.Has(fsnotify.Write) {
@@ -46,12 +79,13 @@ func uploader(ctx context.Context, client *http.Client, logpath, apiURL string) 
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
-					return
+					return nil
 				}
 				log.Error("fswatcher error", "err", err)
+				return err
 			}
 		}
-	}()
+	})
 
 	err = watcher.Add(logpath)
 	if err != nil {
@@ -63,8 +97,7 @@ func uploader(ctx context.Context, client *http.Client, logpath, apiURL string) 
 		return err
 	}
 
-	go func() {
-
+	g.Go(func() error {
 		for _, fi := range dir {
 			files := []string{}
 			if isAvroFileName(fi.Name()) {
@@ -75,40 +108,63 @@ func uploader(ctx context.Context, client *http.Client, logpath, apiURL string) 
 				processCh <- path.Join(logpath, n)
 			}
 		}
-	}()
+		return nil
+	})
 
-	workers, ctx := errgroup.WithContext(ctx)
+	uploadOkCounter := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "upload_success_total",
+		Help: "Files uploaded ok",
+	})
+	metrics.MustRegister(uploadOkCounter)
+	uploadErrorCounter := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "upload_failure_total",
+		Help: "File upload failures",
+	})
+	metrics.MustRegister(uploadErrorCounter)
+
+	uploadTimeHistogram := prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "upload_duration_seconds",
+		Help:    "Upload time for successful requests",
+		Buckets: []float64{.1, .25, .5, 1, 2.5, 5, 10},
+	})
+	metrics.MustRegister(uploadTimeHistogram)
 
 	for workerN := 1; workerN <= 2; workerN++ {
 		log.Info("Starting upload worker", "n", workerN)
 
-		workers.Go(func() error {
+		g.Go(func() error {
 			for {
 				select {
 				case <-ctx.Done():
 					return nil
 				case p := <-processCh:
 					log.Debug("change to file", "path", p)
-					err := upload(ctx, client, p, apiURL)
+					err := upload(ctx, client, p, apiURL, uploadTimeHistogram)
 					if err != nil {
 						log.Error("error uploading", "path", p, "err", err)
+						uploadErrorCounter.Inc()
 						continue
 					}
+					uploadOkCounter.Inc()
 				}
 			}
 		})
 	}
 
-	return workers.Wait()
+	return g.Wait()
 }
 
 func isAvroFileName(name string) bool {
 	return strings.HasSuffix(name, ".avro")
 }
 
-func upload(ctx context.Context, client *http.Client, filePath, apiURL string) error {
+func upload(ctx context.Context, client *http.Client, filePath, apiURL string, histogram prometheus.Histogram) error {
+
+	timer := prometheus.NewTimer(histogram)
 
 	log := logger.Setup()
+
+	time.Sleep(200 * time.Millisecond)
 
 	_, baseName := path.Split(filePath)
 	log = log.With("file", baseName)
@@ -128,7 +184,8 @@ func upload(ctx context.Context, client *http.Client, filePath, apiURL string) e
 		return err
 	}
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		log.Info("uploaded", "code", resp.StatusCode)
+		duration := timer.ObserveDuration()
+		log.Info("uploaded", "code", resp.StatusCode, "duration", duration)
 	} else {
 		log.Warn("upload error", "code", resp.StatusCode, "status", resp.Status)
 		return fmt.Errorf("upload error %d (%s)", resp.StatusCode, resp.Status)
