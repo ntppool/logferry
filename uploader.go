@@ -94,14 +94,15 @@ func uploader(ctx context.Context, client *http.Client, logpath, apiURL string, 
 		return err
 	}
 
-	dir, err := os.ReadDir(logpath)
-	if err != nil {
-		return err
-	}
-
 	g.Go(func() error {
 		first := true
 		for {
+
+			dir, err := os.ReadDir(logpath)
+			if err != nil {
+				return err
+			}
+
 			for _, fi := range dir {
 				files := []string{}
 				if isAvroFileName(fi.Name()) {
