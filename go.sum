@@ -108,6 +108,8 @@ go.ntppool.org/common v0.0.2-0.20230708194914-3ba8ba4a228f h1:kkyp+ywZRooAjhQ8FE
 go.ntppool.org/common v0.0.2-0.20230708194914-3ba8ba4a228f/go.mod h1:Sb+itRJHWpCglx0emoPVtl25KT79yi9evbHUrQLCzlc=
 go.ntppool.org/common v0.0.2-0.20230708194914-aa6ed798b819 h1:JFt4QDGaHZ6kh8swuW3UTBXGb890+6hhbgJnFEVxJCo=
 go.ntppool.org/common v0.0.2-0.20230708194914-aa6ed798b819/go.mod h1:Sb+itRJHWpCglx0emoPVtl25KT79yi9evbHUrQLCzlc=
+go.ntppool.org/common v0.1.0 h1:+SgLr1qcesMOLuPMfiHXybaL6urCXu8MzPoG0N7par4=
+go.ntppool.org/common v0.1.0/go.mod h1:Sb+itRJHWpCglx0emoPVtl25KT79yi9evbHUrQLCzlc=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20210921155107-089bfa567519/go.mod h1:GvvjBRRGRdwPK5ydBHafDWAxML/pGHZbMvKqRZ5+Abc=
 golang.org/x/crypto v0.11.0 h1:6Ewdq3tDic1mg5xRO4milcWCfMVQhI4NkqWWvqejpuA=
