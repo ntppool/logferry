@@ -19,6 +19,13 @@ import (
 	"go.ntppool.org/common/ulid"
 )
 
+type uploadSet struct {
+	client              *http.Client
+	fl                  *fileLock
+	apiURL              string
+	uploadTimeHistogram prometheus.Histogram
+}
+
 func uploader(ctx context.Context, client *http.Client, logpath, apiURL string, metrics prometheus.Registerer) error {
 
 	log := logger.Setup()
@@ -152,11 +159,16 @@ func uploader(ctx context.Context, client *http.Client, logpath, apiURL string, 
 	})
 	metrics.MustRegister(uploadTimeHistogram)
 
-	fl := NewFileLock()
+	up := uploadSet{
+		client:              client,
+		fl:                  NewFileLock(),
+		apiURL:              apiURL,
+		uploadTimeHistogram: uploadTimeHistogram,
+	}
 
 	for workerN := 1; workerN <= 2; workerN++ {
 		workerN := workerN
-		log.Info("Starting upload worker", "n", workerN)
+		log.Info("starting upload worker", "n", workerN)
 		g.Go(func() error {
 			log := log.With("n", workerN)
 
@@ -174,7 +186,7 @@ func uploader(ctx context.Context, client *http.Client, logpath, apiURL string, 
 
 					log := log.With("id", id.String())
 
-					err = upload(ctx, fl, log, id.String(), client, p, apiURL, uploadTimeHistogram)
+					err = up.upload(ctx, log, id.String(), p)
 					if err != nil {
 						log.Error("error uploading", "id", id, "path", p, "err", err)
 						uploadErrorCounter.Inc()
@@ -193,16 +205,16 @@ func isAvroFileName(name string) bool {
 	return strings.HasSuffix(name, ".avro")
 }
 
-func upload(ctx context.Context, fl *fileLock, log *slog.Logger, id string, client *http.Client, filePath, apiURL string, histogram prometheus.Histogram) error {
+func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, filePath string) error {
 
 	_, baseName := path.Split(filePath)
 
-	if !fl.Lock(filePath) {
+	if !up.fl.Lock(filePath) {
 		return fmt.Errorf("%s is already being uploaded", baseName)
 	}
-	defer fl.Unlock(filePath)
+	defer up.fl.Unlock(filePath)
 
-	timer := prometheus.NewTimer(histogram)
+	timer := prometheus.NewTimer(up.uploadTimeHistogram)
 
 	log = log.With("file", baseName)
 
@@ -211,15 +223,16 @@ func upload(ctx context.Context, fl *fileLock, log *slog.Logger, id string, clie
 		return err
 	}
 
-	reqCtx, _ := context.WithTimeout(context.Background(), time.Second*30)
+	reqCtx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
 
-	req, err := http.NewRequestWithContext(reqCtx, "POST", apiURL, fh)
+	req, err := http.NewRequestWithContext(reqCtx, "POST", up.apiURL, fh)
 	if err != nil {
 		return err
 	}
 	req.Header.Add("Request-ID", id)
 
-	resp, err := client.Do(req)
+	resp, err := up.client.Do(req)
 	if err != nil {
 		return err
 	}
