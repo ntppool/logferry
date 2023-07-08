@@ -12,6 +12,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/exp/slices"
+	"golang.org/x/exp/slog"
 	"golang.org/x/sync/errgroup"
 
 	"go.ntppool.org/common/logger"
@@ -151,10 +152,14 @@ func uploader(ctx context.Context, client *http.Client, logpath, apiURL string, 
 	})
 	metrics.MustRegister(uploadTimeHistogram)
 
-	for workerN := 1; workerN <= 2; workerN++ {
-		log.Info("Starting upload worker", "n", workerN)
+	fl := NewFileLock()
 
+	for workerN := 1; workerN <= 2; workerN++ {
+		workerN := workerN
+		log.Info("Starting upload worker", "n", workerN)
 		g.Go(func() error {
+			log := log.With("n", workerN)
+
 			for {
 				select {
 				case <-ctx.Done():
@@ -167,7 +172,9 @@ func uploader(ctx context.Context, client *http.Client, logpath, apiURL string, 
 						log.Error("could not generate ulid", "err", err)
 					}
 
-					err = upload(ctx, id.String(), client, p, apiURL, uploadTimeHistogram)
+					log := log.With("id", id.String())
+
+					err = upload(ctx, fl, log, id.String(), client, p, apiURL, uploadTimeHistogram)
 					if err != nil {
 						log.Error("error uploading", "id", id, "path", p, "err", err)
 						uploadErrorCounter.Inc()
@@ -186,13 +193,17 @@ func isAvroFileName(name string) bool {
 	return strings.HasSuffix(name, ".avro")
 }
 
-func upload(ctx context.Context, id string, client *http.Client, filePath, apiURL string, histogram prometheus.Histogram) error {
+func upload(ctx context.Context, fl *fileLock, log *slog.Logger, id string, client *http.Client, filePath, apiURL string, histogram prometheus.Histogram) error {
+
+	_, baseName := path.Split(filePath)
+
+	if !fl.Lock(filePath) {
+		return fmt.Errorf("%s is already being uploaded", baseName)
+	}
+	defer fl.Unlock(filePath)
 
 	timer := prometheus.NewTimer(histogram)
 
-	log := logger.Setup().With("id", id)
-
-	_, baseName := path.Split(filePath)
 	log = log.With("file", baseName)
 
 	fh, err := os.Open(filePath)
