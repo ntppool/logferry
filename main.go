@@ -85,7 +85,7 @@ func run(ctx context.Context) error {
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
 
-	version.RegisterMetric(metricssrv.Registry())
+	version.RegisterMetric("logferry", metricssrv.Registry())
 
 	err = uploader(ctx, client, *path, *upstreamAPI, metricssrv.Registry())
 	if err != nil {
