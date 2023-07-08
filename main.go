@@ -46,12 +46,18 @@ func run(ctx context.Context) error {
 	certFile := flag.String("cert", "", "client certificate")
 	path := flag.String("path", "", "path with avro files")
 	upstreamAPI := flag.String("upstream", "", "log receiver URL")
+	jsondump := flag.Bool("jsondump", false, "dump specified files to json")
 	versionFlag := flag.Bool("version", false, "show version")
 
 	flag.Parse()
 
 	if *versionFlag {
 		fmt.Printf("logferry %s\n", version.Version())
+		os.Exit(0)
+	}
+
+	if *jsondump {
+		dumpJSON(flag.Args())
 		os.Exit(0)
 	}
 
