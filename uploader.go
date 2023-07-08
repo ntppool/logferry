@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"path"
@@ -10,6 +11,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"go.ntppool.org/common/logger"
 	"golang.org/x/exp/slices"
+	"golang.org/x/sync/errgroup"
 )
 
 func uploader(ctx context.Context, client *http.Client, logpath, apiURL string) error {
@@ -75,23 +77,29 @@ func uploader(ctx context.Context, client *http.Client, logpath, apiURL string) 
 		}
 	}()
 
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case p := <-processCh:
-			log.Debug("change to file", "path", p)
-			err := upload(ctx, client, p, apiURL)
-			if err != nil {
-				log.Error("error uploading", "path", p, "err", err)
-				continue
+	workers, ctx := errgroup.WithContext(ctx)
+
+	for workerN := 1; workerN <= 2; workerN++ {
+		log.Info("Starting upload worker", "n", workerN)
+
+		workers.Go(func() error {
+			for {
+				select {
+				case <-ctx.Done():
+					return nil
+				case p := <-processCh:
+					log.Debug("change to file", "path", p)
+					err := upload(ctx, client, p, apiURL)
+					if err != nil {
+						log.Error("error uploading", "path", p, "err", err)
+						continue
+					}
+				}
 			}
-			err = os.Remove(p)
-			if err != nil {
-				log.Error("error removing log", "path", p, "err", err)
-			}
-		}
+		})
 	}
+
+	return workers.Wait()
 }
 
 func isAvroFileName(name string) bool {
@@ -123,6 +131,12 @@ func upload(ctx context.Context, client *http.Client, filePath, apiURL string) e
 		log.Info("uploaded", "code", resp.StatusCode)
 	} else {
 		log.Warn("upload error", "code", resp.StatusCode, "status", resp.Status)
+		return fmt.Errorf("upload error %d (%s)", resp.StatusCode, resp.Status)
+	}
+
+	err = os.Remove(filePath)
+	if err != nil {
+		return fmt.Errorf("error removing log: %w", err)
 	}
 
 	return nil

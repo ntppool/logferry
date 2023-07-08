@@ -65,7 +65,7 @@ nfpms:
     vendor: NTP Pool Project
     homepage: https://www.ntppool.org/
     maintainer: Ask Bjørn Hansen <ask@develooper.com>
-    description: Logshipping daemon for GeoDNS
+    description: Log shipping daemon for GeoDNS
     license: Apache 2.0
     formats:
       - deb
