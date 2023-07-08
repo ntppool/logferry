@@ -199,7 +199,9 @@ func upload(ctx context.Context, id string, client *http.Client, filePath, apiUR
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, fh)
+	reqCtx, _ := context.WithTimeout(context.Background(), time.Second*30)
+
+	req, err := http.NewRequestWithContext(reqCtx, "POST", apiURL, fh)
 	if err != nil {
 		return err
 	}
