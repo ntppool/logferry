@@ -15,6 +15,7 @@ import (
 	"go.ntppool.org/common/health"
 	kafconn "go.ntppool.org/common/kafka"
 	"go.ntppool.org/common/logger"
+	"go.ntppool.org/common/version"
 )
 
 type APIServer struct{}
@@ -23,7 +24,7 @@ func main() {
 
 	log := logger.Setup()
 
-	log.Info("Starting API server")
+	log.Info("Logferry API server", "version", version.Version())
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 

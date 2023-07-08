@@ -15,9 +15,9 @@ builds:
       - darwin
     ldflags:
       - -s -w
-      - -X go.ntppool.org/logferry/version.VERSION={{.Version}}
-      - -X go.ntppool.org/logferry/version.gitVersion={{.ShortCommit}}
-      - -X go.ntppool.org/logferry/version.buildTime={{.Date}}
+      - -X go.ntppool.org/common/version.VERSION={{.Version}}
+      - -X go.ntppool.org/common/version.gitVersion={{.ShortCommit}}
+      - -X go.ntppool.org/common/version.buildTime={{.Date}}
 
   - main: ./logferry-api/
     id: logferry-api

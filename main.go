@@ -12,6 +12,7 @@ import (
 	"go.ntppool.org/common/apitls"
 	"go.ntppool.org/common/logger"
 	"go.ntppool.org/common/metricsserver"
+	"go.ntppool.org/common/version"
 )
 
 func main() {
@@ -39,14 +40,22 @@ func main() {
 }
 
 func run(ctx context.Context) error {
-	// log := logger.Setup()
+	log := logger.Setup()
 
 	keyFile := flag.String("key", "", "client key")
 	certFile := flag.String("cert", "", "client certificate")
 	path := flag.String("path", "", "path with avro files")
 	upstreamAPI := flag.String("upstream", "", "log receiver URL")
+	versionFlag := flag.Bool("version", false, "show version")
 
 	flag.Parse()
+
+	if *versionFlag {
+		fmt.Printf("logferry %s\n", version.Version())
+		os.Exit(0)
+	}
+
+	log.Info("logferry", "version", version.Version())
 
 	// todo: unless upstream API isn't https
 	if len(*keyFile) == 0 || len(*certFile) == 0 {
@@ -67,10 +76,10 @@ func run(ctx context.Context) error {
 	go metricssrv.ListenAndServe(ctx, 9097)
 
 	metricssrv.Registry().MustRegister(
-		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{
-			Namespace: "logferry",
-		}),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
+
+	version.RegisterMetric(metricssrv.Registry())
 
 	err = uploader(ctx, client, *path, *upstreamAPI, metricssrv.Registry())
 	if err != nil {
