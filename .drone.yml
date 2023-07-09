@@ -146,7 +146,7 @@ steps:
   - name: download
     image: fedora:38 # curl version 7.83 or later
     commands:
-      - ./scripts/download-release test/${DRONE_BUILD_PARENT} dist/
+      - ./scripts/download-release logferry test/${DRONE_BUILD_PARENT} dist/
     resources:
       requests:
         cpu: 250
@@ -200,6 +200,6 @@ trigger:
     - publish
 ---
 kind: signature
-hmac: ef84ea809d534797824aa4132f7677662706038ed1606a42e3a070862afe35ae
+hmac: d7a96d23fa9f7a0312fcea8820616e84f0c8159ad69107f8d40a3bdd9486ac83
 
 ...
