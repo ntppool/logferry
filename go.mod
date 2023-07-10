@@ -4,14 +4,14 @@ go 1.20
 
 require (
 	github.com/BoRuDar/configuration/v4 v4.2.2
-	github.com/abh/geodns/v3 v3.2.4-0.20230704234921-3d0eaedbe499
+	github.com/abh/geodns/v3 v3.3.2-0.20230710063303-13e3986f5925
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/hamba/avro/v2 v2.12.0
 	github.com/labstack/echo/v4 v4.10.2
 	github.com/prometheus/client_golang v1.16.0
 	github.com/segmentio/kafka-go v0.4.42
 	go.ntppool.org/common v0.1.1
-	golang.org/x/exp v0.0.0-20230626212559-97b1e661b5df
+	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1
 	golang.org/x/sync v0.3.0
 )
 
