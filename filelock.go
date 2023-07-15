@@ -13,6 +13,13 @@ func NewFileLock() *fileLock {
 	}
 }
 
+func (fl *fileLock) IsLocked(name string) bool {
+	fl.mu.Lock()
+	defer fl.mu.Unlock()
+	_, ok := fl.m[name]
+	return ok
+}
+
 func (fl *fileLock) Lock(name string) bool {
 	fl.mu.Lock()
 	defer fl.mu.Unlock()

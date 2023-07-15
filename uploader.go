@@ -102,6 +102,31 @@ func uploader(ctx context.Context, client *http.Client, logpath, apiURL string, 
 		return err
 	}
 
+	uploadOkCounter := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "upload_success_total",
+		Help: "Files uploaded ok",
+	})
+	metrics.MustRegister(uploadOkCounter)
+	uploadErrorCounter := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "upload_failure_total",
+		Help: "File upload failures",
+	})
+	metrics.MustRegister(uploadErrorCounter)
+
+	uploadTimeHistogram := prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "upload_duration_seconds",
+		Help:    "Upload time for successful requests",
+		Buckets: []float64{.5, 1, 1.5, 2, 2.5, 3, 3.5, 5, 10},
+	})
+	metrics.MustRegister(uploadTimeHistogram)
+
+	up := uploadSet{
+		client:              client,
+		fl:                  NewFileLock(),
+		apiURL:              apiURL,
+		uploadTimeHistogram: uploadTimeHistogram,
+	}
+
 	g.Go(func() error {
 		first := true
 		for {
@@ -127,7 +152,10 @@ func uploader(ctx context.Context, client *http.Client, logpath, apiURL string, 
 							// just slow down a bit if we are retrying
 						}
 					}
-					processCh <- path.Join(logpath, n)
+					fullName := path.Join(logpath, n)
+					if !up.fl.IsLocked(fullName) {
+						processCh <- fullName
+					}
 				}
 			}
 
@@ -140,31 +168,6 @@ func uploader(ctx context.Context, client *http.Client, logpath, apiURL string, 
 			}
 		}
 	})
-
-	uploadOkCounter := prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "upload_success_total",
-		Help: "Files uploaded ok",
-	})
-	metrics.MustRegister(uploadOkCounter)
-	uploadErrorCounter := prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "upload_failure_total",
-		Help: "File upload failures",
-	})
-	metrics.MustRegister(uploadErrorCounter)
-
-	uploadTimeHistogram := prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "upload_duration_seconds",
-		Help:    "Upload time for successful requests",
-		Buckets: []float64{.1, .25, .5, 1, 2.5, 5, 10},
-	})
-	metrics.MustRegister(uploadTimeHistogram)
-
-	up := uploadSet{
-		client:              client,
-		fl:                  NewFileLock(),
-		apiURL:              apiURL,
-		uploadTimeHistogram: uploadTimeHistogram,
-	}
 
 	for workerN := 1; workerN <= 2; workerN++ {
 		workerN := workerN
