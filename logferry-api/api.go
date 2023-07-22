@@ -89,7 +89,9 @@ func (apisrv *APIServer) run(ctx context.Context) error {
 	log := logger.Setup()
 	conf := apisrv.conf
 
-	log.Info("Starting labstack")
+	listen := ":4200"
+
+	log.Info("Starting api server", "port", listen)
 
 	caCertPool, err := apitls.CAPool()
 	if err != nil {
@@ -115,7 +117,7 @@ func (apisrv *APIServer) run(ctx context.Context) error {
 	apiEcho.POST("/geodns/avro", postAvro(apisrv.kaf))
 
 	hsrv := http.Server{
-		Addr:    ":4200",
+		Addr:    listen,
 		Handler: e,
 		TLSConfig: &tls.Config{
 			MinVersion: tls.VersionTLS12,

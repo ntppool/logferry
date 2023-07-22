@@ -22,12 +22,12 @@ func postAvro(kaf *kafconn.Kafka) func(c echo.Context) error {
 		log.Error("avro schema setup", "err", err)
 	}
 
+	requestLimiter := make(chan bool, 20)
+
 	return func(c echo.Context) error {
 
 		ctx := c.Request().Context()
-
 		log := logger.Setup()
-
 		hostname := ctx.Value(CertificateKey).(string)
 
 		if len(hostname) == 0 {
@@ -35,8 +35,24 @@ func postAvro(kaf *kafconn.Kafka) func(c echo.Context) error {
 		}
 
 		id := c.Request().Header.Get("Request-ID")
-
 		log = log.With("host", hostname, "id", id)
+
+		if len(requestLimiter) > 10 {
+			log.Debug("rate limiting queue",
+				"length", len(requestLimiter),
+				"capacity", cap(requestLimiter),
+			)
+		}
+
+		select {
+		case requestLimiter <- true:
+			defer func() {
+				<-requestLimiter
+			}()
+		default:
+			c.Response().Header().Add("Retry-After", "5")
+			return c.String(http.StatusTooManyRequests, "try later")
+		}
 
 		writer, err := kaf.NewWriter("geodns-avro")
 		if err != nil {
