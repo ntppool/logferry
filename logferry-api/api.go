@@ -18,7 +18,10 @@ import (
 	"go.ntppool.org/common/version"
 )
 
-type APIServer struct{}
+type APIServer struct {
+	kaf  *kafconn.Kafka
+	conf Config
+}
 
 func main() {
 
@@ -39,20 +42,52 @@ func main() {
 		os.Exit(2)
 	}
 
-	apisrv := &APIServer{}
-
-	go health.HealthCheckListener(ctx, 4280, log.WithGroup("health"))
-
-	err = apisrv.run(ctx, conf)
+	apisrv, err := NewAPIServer(ctx, conf)
 	if err != nil {
-		logger.Setup().Error("server error", "err", err)
+		log.Error("could not setup API server: %s", err)
+	}
+
+	healthSrv := health.NewServer(func(w http.ResponseWriter, r *http.Request) {
+		err := apisrv.kaf.CheckPartitions()
+		if err != nil {
+			w.WriteHeader(502)
+			w.Write([]byte("kafka error"))
+			return
+		}
+		w.WriteHeader(200)
+		w.Write([]byte("ok!"))
+	})
+	healthSrv.SetLogger(log.WithGroup("health"))
+	go healthSrv.Listen(ctx, 4280)
+
+	err = apisrv.run(ctx)
+	if err != nil {
+		log.Error("server error", "err", err)
 	}
 
 	cancel()
 }
 
-func (apisrv *APIServer) run(ctx context.Context, conf Config) error {
+func NewAPIServer(ctx context.Context, conf Config) (*APIServer, error) {
+	kaf, err := kafconn.NewKafka(ctx, kafconn.TLSSetup{
+		Key:  conf.Kafka.Key,
+		Cert: conf.Kafka.Cert,
+		CA:   conf.Kafka.CA,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &APIServer{
+		kaf:  kaf,
+		conf: conf,
+	}, nil
+
+}
+
+func (apisrv *APIServer) run(ctx context.Context) error {
 	log := logger.Setup()
+	conf := apisrv.conf
 
 	log.Info("Starting labstack")
 
@@ -76,17 +111,8 @@ func (apisrv *APIServer) run(ctx context.Context, conf Config) error {
 		return c.String(http.StatusOK, "logferry")
 	})
 
-	kaf, err := kafconn.NewKafka(ctx, kafconn.TLSSetup{
-		Key:  conf.Kafka.Key,
-		Cert: conf.Kafka.Cert,
-		CA:   conf.Kafka.CA,
-	})
-	if err != nil {
-		return err
-	}
-
 	apiEcho := e.Group("/api/v1", apisrv.certificateMiddleware)
-	apiEcho.POST("/geodns/avro", postAvro(kaf))
+	apiEcho.POST("/geodns/avro", postAvro(apisrv.kaf))
 
 	hsrv := http.Server{
 		Addr:    ":4200",
