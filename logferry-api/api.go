@@ -44,7 +44,8 @@ func main() {
 
 	apisrv, err := NewAPIServer(ctx, conf)
 	if err != nil {
-		log.Error("could not setup API server: %s", err)
+		log.Error("could not setup API server: %s", "err", err)
+		os.Exit(2)
 	}
 
 	healthSrv := health.NewServer(func(w http.ResponseWriter, r *http.Request) {
