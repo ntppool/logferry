@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
@@ -12,7 +13,6 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/exp/slices"
-	"golang.org/x/exp/slog"
 	"golang.org/x/sync/errgroup"
 
 	"go.ntppool.org/common/logger"

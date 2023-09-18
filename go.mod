@@ -12,7 +12,7 @@ require (
 	github.com/labstack/echo/v4 v4.11.1
 	github.com/prometheus/client_golang v1.16.0
 	github.com/segmentio/kafka-go v0.4.42
-	go.ntppool.org/common v0.2.1-0.20230723064804-be9b63f38208
+	go.ntppool.org/common v0.2.1
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
 	golang.org/x/sync v0.3.0
 )

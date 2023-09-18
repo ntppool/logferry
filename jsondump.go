@@ -3,9 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
-
-	"golang.org/x/exp/slog"
 
 	"github.com/abh/geodns/v3/querylog"
 	"github.com/hamba/avro/v2/ocf"
