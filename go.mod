@@ -10,8 +10,8 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/hamba/avro/v2 v2.16.0
 	github.com/labstack/echo/v4 v4.11.1
-	github.com/prometheus/client_golang v1.16.0
-	github.com/segmentio/kafka-go v0.4.42
+	github.com/prometheus/client_golang v1.17.0
+	github.com/segmentio/kafka-go v0.4.43
 	go.ntppool.org/common v0.2.1
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
 	golang.org/x/sync v0.3.0
@@ -26,7 +26,7 @@ require (
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.16.7 // indirect
+	github.com/klauspost/compress v1.17.0 // indirect
 	github.com/labstack/gommon v0.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
@@ -37,9 +37,9 @@ require (
 	github.com/oklog/ulid/v2 v2.1.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.18 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/prometheus/client_model v0.4.0 // indirect
+	github.com/prometheus/client_model v0.4.1-0.20230718164431-9a2bf3000d16 // indirect
 	github.com/prometheus/common v0.44.0 // indirect
-	github.com/prometheus/procfs v0.11.1 // indirect
+	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/spf13/cobra v1.7.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
