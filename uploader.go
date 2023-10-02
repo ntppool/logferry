@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -239,6 +240,16 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 	if err != nil {
 		up.client.CloseIdleConnections()
 		return err
+	}
+	if resp.Body != nil {
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Warn("error reading response body", "err", err)
+		}
+		if len(b) > 0 {
+			log.Warn("unexpected bytes in response body (expected empty)", "count", len(b), "data", string(b))
+		}
+		resp.Body.Close()
 	}
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		duration := timer.ObserveDuration()

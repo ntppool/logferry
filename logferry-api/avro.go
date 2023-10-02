@@ -123,9 +123,10 @@ func postAvro(kaf *kafconn.Kafka) func(c echo.Context) error {
 			"errors", stats.Errors,
 			"batches", stats.BatchBytes.Count,
 			"total bytes", stats.BatchBytes.Sum,
-			"total time", stats.BatchTime.Sum,
-			"total time", stats.WaitTime.Sum,
+			"total batch time", stats.BatchTime.Sum,
+			"total wait time", stats.WaitTime.Sum,
 			"avg queue time", stats.BatchQueueTime.Avg,
+			"total queue time", stats.BatchQueueTime.Sum,
 		)
 
 		err = writer.Close()

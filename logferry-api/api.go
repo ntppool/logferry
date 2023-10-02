@@ -134,13 +134,13 @@ func (apisrv *APIServer) run(ctx context.Context) error {
 
 	go func() {
 		if err := hsrv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
-			e.Logger.Fatal("shutting down the server")
+			e.Logger.Infof("ListenAndServeTLS returned: %s", err)
 		}
 	}()
 
 	<-ctx.Done()
 
-	shutdownCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	if err := e.Shutdown(shutdownCtx); err != nil {
 		return err
