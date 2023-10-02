@@ -51,6 +51,7 @@ func postAvro(kaf *kafconn.Kafka) func(c echo.Context) error {
 				<-requestLimiter
 			}()
 		default:
+			c.Request().Close = true
 			c.Response().Header().Add("Retry-After", "5")
 			return c.String(http.StatusTooManyRequests, "try later")
 		}
