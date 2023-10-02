@@ -21,8 +21,16 @@ func NewWriterMetrics(writer *kafka.Writer, registry prometheus.Registerer, subs
 	wm.batchQueueTime = wm.newSummary("batch_queue_time", "kafka batch queue time")
 	wm.writeTime = wm.newSummary("write_time", "kafka write time")
 	wm.waitTime = wm.newSummary("wait_time", "kafka wait time")
-	wm.messages = wm.newCounterProxy("messages", "message count")
-	wm.errors = wm.newCounterProxy("errors", "error count")
+	wm.messages = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: wm.subsystem,
+		Name:      "messages",
+		Help:      "kafka messages",
+	})
+	wm.errors = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: wm.subsystem,
+		Name:      "errors",
+		Help:      "kafka errors",
+	})
 
 	go func() {
 		for {
@@ -39,7 +47,7 @@ type writerMetrics struct {
 
 	batchTime, batchBytes, batchQueueTime, writeTime, waitTime *summary
 
-	messages, errors *counterProxy
+	messages, errors prometheus.Counter
 }
 
 func (wm *writerMetrics) updateStats() {
@@ -51,8 +59,9 @@ func (wm *writerMetrics) updateStats() {
 	wm.writeTime.add(ws.WriteTime.Count, ws.WriteTime.Sum.Seconds())
 
 	wm.batchBytes.add(ws.BatchBytes.Count, float64(ws.BatchBytes.Sum))
-	wm.messages.set(uint64(ws.Messages))
-	wm.errors.set(uint64(ws.Errors))
+
+	wm.messages.Add(float64(ws.Messages))
+	wm.errors.Add(float64(ws.Errors))
 
 }
 
@@ -63,13 +72,6 @@ type summary struct {
 	mu    sync.Mutex
 	count uint64
 	sum   float64
-}
-
-type counterProxy struct {
-	desc *prometheus.Desc
-
-	mu    sync.Mutex
-	count uint64
 }
 
 func (wm *writerMetrics) newSummary(name, help string) *summary {
@@ -100,33 +102,4 @@ func (s *summary) Collect(metrics chan<- prometheus.Metric) {
 	s.mu.Unlock()
 
 	metrics <- prometheus.MustNewConstSummary(s.desc, count, sum, nil)
-}
-
-func (wm *writerMetrics) newCounterProxy(name, help string) *counterProxy {
-	if len(wm.subsystem) > 0 {
-		name = wm.subsystem + "_" + name
-	}
-	s := &counterProxy{
-		desc: prometheus.NewDesc(name, help, nil, nil),
-	}
-	wm.registry.MustRegister(s)
-	return s
-}
-
-func (s *counterProxy) set(count uint64) {
-	s.mu.Lock()
-	s.count = count
-	s.mu.Unlock()
-}
-
-func (s *counterProxy) Describe(descs chan<- *prometheus.Desc) {
-	descs <- s.desc
-}
-
-func (s *counterProxy) Collect(metrics chan<- prometheus.Metric) {
-	s.mu.Lock()
-	count := s.count
-	s.mu.Unlock()
-
-	metrics <- prometheus.MustNewConstMetric(s.desc, prometheus.CounterValue, float64(count))
 }

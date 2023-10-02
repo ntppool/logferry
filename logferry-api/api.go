@@ -76,6 +76,7 @@ func main() {
 	g.Go(func() error {
 		return metricssrv.ListenAndServe(ctx, 4281)
 	})
+	version.RegisterMetric("logferry", metricssrv.Registry())
 
 	g.Go(func() error {
 		err = apisrv.run(ctx, metricssrv.Registry())
