@@ -38,9 +38,9 @@ func httpClient(cm apitls.CertificateProvider) (*http.Client, error) {
 			MaxIdleConns:    3,
 			IdleConnTimeout: 15 * time.Second,
 
-			TLSHandshakeTimeout:   10 * time.Second,
-			ResponseHeaderTimeout: 10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
+			TLSHandshakeTimeout:   5 * time.Second,
+			ResponseHeaderTimeout: 20 * time.Second,
+			ExpectContinueTimeout: 5 * time.Second,
 		}
 		clientCache = &http.Client{
 			Transport: transport,
