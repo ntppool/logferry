@@ -237,6 +237,7 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 
 	resp, err := up.client.Do(req)
 	if err != nil {
+		up.client.CloseIdleConnections()
 		return err
 	}
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
