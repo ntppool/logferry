@@ -9,6 +9,7 @@ require (
 	github.com/abh/geodns/v3 v3.3.3
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/hamba/avro/v2 v2.16.0
+	github.com/labstack/echo-contrib v0.15.0
 	github.com/labstack/echo/v4 v4.11.1
 	github.com/prometheus/client_golang v1.17.0
 	github.com/segmentio/kafka-go v0.4.43

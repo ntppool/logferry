@@ -7,17 +7,21 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/labstack/echo-contrib/echoprometheus"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
 
 	"go.ntppool.org/common/apitls"
 	"go.ntppool.org/common/health"
 	kafconn "go.ntppool.org/common/kafka"
 	"go.ntppool.org/common/logger"
+	"go.ntppool.org/common/metricsserver"
 	"go.ntppool.org/common/version"
 )
 
@@ -68,8 +72,13 @@ func main() {
 		return healthSrv.Listen(ctx, 4280)
 	})
 
+	metricssrv := metricsserver.New()
 	g.Go(func() error {
-		err = apisrv.run(ctx)
+		return metricssrv.ListenAndServe(ctx, 4281)
+	})
+
+	g.Go(func() error {
+		err = apisrv.run(ctx, metricssrv.Registry())
 		if err != nil {
 			log.Error("server error", "err", err)
 			return err
@@ -102,7 +111,7 @@ func NewAPIServer(ctx context.Context, conf Config) (*APIServer, error) {
 
 }
 
-func (apisrv *APIServer) run(ctx context.Context) error {
+func (apisrv *APIServer) run(ctx context.Context, registry prometheus.Registerer) error {
 	log := logger.Setup()
 	conf := apisrv.conf
 
@@ -122,6 +131,22 @@ func (apisrv *APIServer) run(ctx context.Context) error {
 
 	e := echo.New()
 
+	e.Use(echoprometheus.NewMiddlewareWithConfig(echoprometheus.MiddlewareConfig{
+		Subsystem:  "logferry",
+		Registerer: registry,
+		HistogramOptsFunc: func(opts prometheus.HistogramOpts) prometheus.HistogramOpts {
+			if strings.HasSuffix(opts.Name, "size_bytes") {
+				bKB := float64(1 << (10 * 1))
+				bMB := float64(1 << (10 * 2))
+				opts.Buckets = []float64{0, 1.0 * bKB, 16.0 * bKB, 128.0 * bKB, 512.0 * bKB, 1.0 * bMB, 4 * bMB, 8.0 * bMB, 16.0 * bMB}
+			}
+			if strings.HasSuffix(opts.Name, "duration_seconds") {
+				opts.Buckets = []float64{.01, .05, .1, .25, .5, 1, 2, 4, 8, 16}
+			}
+			return opts
+		},
+	}))
+
 	// e.Use(slogecho.New(log.WithGroup("api")))
 	e.Use(middleware.Recover())
 
@@ -136,6 +161,8 @@ func (apisrv *APIServer) run(ctx context.Context) error {
 	}
 	writer.BatchTimeout = 500 * time.Millisecond
 	writer.BatchSize = 10000
+
+	NewWriterMetrics(writer, registry, "logferry_kafka")
 
 	apiEcho := e.Group("/api/v1", apisrv.certificateMiddleware)
 	apiEcho.POST("/geodns/avro", postAvro(writer))
