@@ -2,20 +2,18 @@ package main
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/hamba/avro/v2"
 	"github.com/hamba/avro/v2/ocf"
 	"github.com/labstack/echo/v4"
 	"github.com/segmentio/kafka-go"
 
-	kafconn "go.ntppool.org/common/kafka"
 	"go.ntppool.org/common/logger"
 
 	"github.com/abh/geodns/v3/querylog"
 )
 
-func postAvro(kaf *kafconn.Kafka) func(c echo.Context) error {
+func postAvro(writer *kafka.Writer) func(c echo.Context) error {
 	log := logger.Setup()
 
 	schema, err := querylog.AvroSchema()
@@ -55,14 +53,6 @@ func postAvro(kaf *kafconn.Kafka) func(c echo.Context) error {
 			c.Response().Header().Add("Retry-After", "5")
 			return c.String(http.StatusTooManyRequests, "try later")
 		}
-
-		writer, err := kaf.NewWriter("geodns-avro")
-		if err != nil {
-			log.Error("could not get kafka writer", "err", err)
-			return c.NoContent(http.StatusInternalServerError)
-		}
-		writer.BatchTimeout = 500 * time.Millisecond
-		writer.BatchSize = 5000
 
 		dec, err := ocf.NewDecoder(c.Request().Body)
 		if err != nil {
@@ -118,25 +108,7 @@ func postAvro(kaf *kafconn.Kafka) func(c echo.Context) error {
 			log.Error("avro decoder error", "err", dec.Error())
 		}
 
-		stats := writer.Stats()
-		log.Info("kafka write stats",
-			"messages", stats.Messages,
-			"errors", stats.Errors,
-			"batches", stats.BatchBytes.Count,
-			"total bytes", stats.BatchBytes.Sum,
-			"total batch time", stats.BatchTime.Sum,
-			"total wait time", stats.WaitTime.Sum,
-			"avg queue time", stats.BatchQueueTime.Avg,
-			"total queue time", stats.BatchQueueTime.Sum,
-		)
-
-		err = writer.Close()
-		if err != nil {
-			log.Error("kafka close error", "err", err)
-			return c.NoContent(http.StatusInternalServerError)
-		}
-
-		// log.Info("accepted messages", "count", count)
+		log.Info("accepted messages", "count", count)
 
 		return c.NoContent(http.StatusAccepted)
 	}

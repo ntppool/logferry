@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"golang.org/x/sync/errgroup"
 
 	"go.ntppool.org/common/apitls"
 	"go.ntppool.org/common/health"
@@ -58,12 +60,25 @@ func main() {
 		w.WriteHeader(200)
 		w.Write([]byte("ok!"))
 	})
-	healthSrv.SetLogger(log.WithGroup("health"))
-	go healthSrv.Listen(ctx, 4280)
 
-	err = apisrv.run(ctx)
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		healthSrv.SetLogger(log.WithGroup("health"))
+		return healthSrv.Listen(ctx, 4280)
+	})
+
+	g.Go(func() error {
+		err = apisrv.run(ctx)
+		if err != nil {
+			log.Error("server error", "err", err)
+			return err
+		}
+		return nil
+	})
+
+	err = g.Wait()
 	if err != nil {
-		log.Error("server error", "err", err)
+		log.Error("run error", "err", err)
 	}
 
 	cancel()
@@ -114,8 +129,15 @@ func (apisrv *APIServer) run(ctx context.Context) error {
 		return c.String(http.StatusOK, "logferry")
 	})
 
+	writer, err := apisrv.kaf.NewWriter("geodns-avro")
+	if err != nil {
+		return fmt.Errorf("could not get kafka writer: %w", err)
+	}
+	writer.BatchTimeout = 500 * time.Millisecond
+	writer.BatchSize = 10000
+
 	apiEcho := e.Group("/api/v1", apisrv.certificateMiddleware)
-	apiEcho.POST("/geodns/avro", postAvro(apisrv.kaf))
+	apiEcho.POST("/geodns/avro", postAvro(writer))
 
 	hsrv := http.Server{
 		Addr:    listen,
@@ -144,6 +166,23 @@ func (apisrv *APIServer) run(ctx context.Context) error {
 	defer cancel()
 	if err := e.Shutdown(shutdownCtx); err != nil {
 		return err
+	}
+
+	stats := writer.Stats()
+	log.Info("kafka write stats",
+		"messages", stats.Messages,
+		"errors", stats.Errors,
+		"batches", stats.BatchBytes.Count,
+		"total bytes", stats.BatchBytes.Sum,
+		"total batch time", stats.BatchTime.Sum,
+		"total wait time", stats.WaitTime.Sum,
+		"avg queue time", stats.BatchQueueTime.Avg,
+		"total queue time", stats.BatchQueueTime.Sum,
+	)
+
+	err = writer.Close()
+	if err != nil {
+		log.Error("kafka close error", "err", err)
 	}
 
 	return nil
