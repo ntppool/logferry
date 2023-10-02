@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/x509"
+	"errors"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -41,6 +42,5 @@ func (srv *APIServer) verifyClient(rawCerts [][]byte, verifiedChains [][]*x509.C
 	if cert != nil {
 		return nil
 	}
-	return nil
-	// return errors.New("no valid certificate found")
+	return errors.New("no valid certificate found")
 }
