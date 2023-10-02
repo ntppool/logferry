@@ -31,6 +31,7 @@ func NewWriterMetrics(writer *kafka.Writer, registry prometheus.Registerer, subs
 		Name:      "errors",
 		Help:      "kafka errors",
 	})
+	registry.MustRegister(wm.messages, wm.errors)
 
 	go func() {
 		for {

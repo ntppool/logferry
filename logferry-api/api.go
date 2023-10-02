@@ -197,18 +197,6 @@ func (apisrv *APIServer) run(ctx context.Context, registry prometheus.Registerer
 		return err
 	}
 
-	stats := writer.Stats()
-	log.Info("kafka write stats",
-		"messages", stats.Messages,
-		"errors", stats.Errors,
-		"batches", stats.BatchBytes.Count,
-		"total bytes", stats.BatchBytes.Sum,
-		"total batch time", stats.BatchTime.Sum,
-		"total wait time", stats.WaitTime.Sum,
-		"avg queue time", stats.BatchQueueTime.Avg,
-		"total queue time", stats.BatchQueueTime.Sum,
-	)
-
 	err = writer.Close()
 	if err != nil {
 		log.Error("kafka close error", "err", err)
