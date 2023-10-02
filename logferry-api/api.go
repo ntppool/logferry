@@ -121,9 +121,9 @@ func (apisrv *APIServer) run(ctx context.Context) error {
 		Addr:    listen,
 		Handler: e,
 		TLSConfig: &tls.Config{
-			MinVersion: tls.VersionTLS12,
-			ClientCAs:  caCertPool,
-			// ClientAuth:            tls.RequireAndVerifyClientCert,
+			MinVersion:            tls.VersionTLS12,
+			MaxVersion:            tls.VersionTLS12,
+			ClientCAs:             caCertPool,
 			ClientAuth:            tls.VerifyClientCertIfGiven,
 			GetCertificate:        cm.GetCertificate,
 			VerifyPeerCertificate: apisrv.verifyClient,
