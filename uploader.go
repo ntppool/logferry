@@ -192,7 +192,7 @@ func uploader(ctx context.Context, client *http.Client, logpath, apiURL string, 
 
 					err = up.upload(ctx, log, id.String(), p)
 					if err != nil {
-						log.Error("error uploading", "id", id, "path", p, "err", err)
+						log.Error("error uploading", "path", p, "err", err)
 						uploadErrorCounter.Inc()
 						continue
 					}
