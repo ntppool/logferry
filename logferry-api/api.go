@@ -44,7 +44,7 @@ func main() {
 
 	apisrv, err := NewAPIServer(ctx, conf)
 	if err != nil {
-		log.Error("could not setup API server: %s", "err", err)
+		log.Error("could not setup API server", "err", err)
 		os.Exit(2)
 	}
 
