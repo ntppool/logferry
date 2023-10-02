@@ -129,7 +129,7 @@ func (apisrv *APIServer) run(ctx context.Context) error {
 			VerifyPeerCertificate: apisrv.verifyClient,
 		},
 		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		WriteTimeout: 15 * time.Second,
 	}
 
 	go func() {
