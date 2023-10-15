@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"net/http"
+	"net/http/httptrace"
 	"sync"
 	"time"
 
 	"go.ntppool.org/common/apitls"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
@@ -41,10 +44,13 @@ func httpClient(cm apitls.CertificateProvider) (*http.Client, error) {
 			IdleConnTimeout: 15 * time.Second,
 
 			TLSHandshakeTimeout:   5 * time.Second,
-			ResponseHeaderTimeout: 20 * time.Second,
+			ResponseHeaderTimeout: 30 * time.Second,
 			ExpectContinueTimeout: 5 * time.Second,
 		},
-		// otelhttp.WithPublicEndpoint(),
+			otelhttp.WithClientTrace(func(ctx context.Context) *httptrace.ClientTrace {
+				return otelhttptrace.NewClientTrace(ctx)
+			}),
+			otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
 		)
 		clientCache = &http.Client{
 			Transport: transport,

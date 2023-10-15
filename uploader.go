@@ -13,14 +13,16 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slices"
 	"golang.org/x/sync/errgroup"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"go.ntppool.org/common/logger"
 	"go.ntppool.org/common/tracing"
 	"go.ntppool.org/common/ulid"
+	"go.ntppool.org/common/version"
 )
 
 type uploadSet struct {
@@ -246,7 +248,7 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 	}
 	span.SetAttributes(attribute.Int64("size", stat.Size()))
 
-	reqCtx, cancel := context.WithTimeout(ctx, time.Second*30)
+	reqCtx, cancel := context.WithTimeout(ctx, time.Second*25)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(reqCtx, "POST", up.apiURL, fh)
@@ -255,6 +257,7 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 		return err
 	}
 	req.Header.Add("Request-ID", id)
+	req.Header.Add("User-Agent", "logferry/"+version.Version())
 
 	resp, err := up.client.Do(req)
 	if err != nil {
