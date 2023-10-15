@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.ntppool.org/common/apitls"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 var clientCache *http.Client
@@ -32,7 +33,8 @@ func httpClient(cm apitls.CertificateProvider) (*http.Client, error) {
 		}
 
 		// tlsConfig.BuildNameToCertificate()
-		transport := &http.Transport{
+
+		transport := otelhttp.NewTransport(&http.Transport{
 			TLSClientConfig: tlsConfig,
 
 			MaxIdleConns:    3,
@@ -41,7 +43,9 @@ func httpClient(cm apitls.CertificateProvider) (*http.Client, error) {
 			TLSHandshakeTimeout:   5 * time.Second,
 			ResponseHeaderTimeout: 20 * time.Second,
 			ExpectContinueTimeout: 5 * time.Second,
-		}
+		},
+		// otelhttp.WithPublicEndpoint(),
+		)
 		clientCache = &http.Client{
 			Transport: transport,
 			Timeout:   20 * time.Second,

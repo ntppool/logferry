@@ -13,10 +13,13 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slices"
 	"golang.org/x/sync/errgroup"
 
 	"go.ntppool.org/common/logger"
+	"go.ntppool.org/common/tracing"
 	"go.ntppool.org/common/ulid"
 )
 
@@ -28,7 +31,6 @@ type uploadSet struct {
 }
 
 func uploader(ctx context.Context, client *http.Client, logpath, apiURL string, metrics prometheus.Registerer) error {
-
 	log := logger.Setup()
 
 	watcher, err := fsnotify.NewWatcher()
@@ -210,11 +212,19 @@ func isAvroFileName(name string) bool {
 }
 
 func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, filePath string) error {
+	ctx, span := tracing.Tracer().Start(ctx, "upload", trace.WithSpanKind(trace.SpanKindClient))
+	defer span.End()
+
+	log = log.With("traceid", span.SpanContext().TraceID())
 
 	_, baseName := path.Split(filePath)
 
+	span.SetAttributes(attribute.String("file", baseName))
+
 	if !up.fl.Lock(filePath) {
-		return fmt.Errorf("%s is already being uploaded", baseName)
+		err := fmt.Errorf("%s is already being uploaded", baseName)
+		span.RecordError(err)
+		return err
 	}
 	defer up.fl.Unlock(filePath)
 
@@ -224,14 +234,16 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 
 	fh, err := os.Open(filePath)
 	if err != nil {
+		span.RecordError(err)
 		return err
 	}
 
-	reqCtx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	reqCtx, cancel := context.WithTimeout(ctx, time.Second*30)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(reqCtx, "POST", up.apiURL, fh)
 	if err != nil {
+		span.RecordError(err)
 		return err
 	}
 	req.Header.Add("Request-ID", id)
@@ -239,11 +251,13 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 	resp, err := up.client.Do(req)
 	if err != nil {
 		up.client.CloseIdleConnections()
+		span.RecordError(err)
 		return err
 	}
 	if resp.Body != nil {
 		b, err := io.ReadAll(resp.Body)
 		if err != nil {
+			span.RecordError(fmt.Errorf("error reading response body: %w", err))
 			log.Warn("error reading response body", "err", err)
 		}
 		if len(b) > 0 {
@@ -256,12 +270,16 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 		log.Info("uploaded", "code", resp.StatusCode, "duration", duration)
 	} else {
 		log.Warn("upload error", "code", resp.StatusCode, "status", resp.Status)
-		return fmt.Errorf("upload error %d (%s)", resp.StatusCode, resp.Status)
+		err := fmt.Errorf("upload error %d (%s)", resp.StatusCode, resp.Status)
+		span.RecordError(err)
+		return err
 	}
 
 	err = os.Remove(filePath)
 	if err != nil {
-		return fmt.Errorf("error removing log: %w", err)
+		err = fmt.Errorf("error removing log: %w", err)
+		span.RecordError(err)
+		return err
 	}
 
 	return nil
