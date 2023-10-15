@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/hamba/avro/v2"
@@ -44,7 +45,7 @@ func postAvro(writer *kafka.Writer) func(c echo.Context) error {
 
 		id := c.Request().Header.Get("Request-ID")
 		span.SetAttributes(attribute.String("Request-ID", id))
-		log = log.With("host", hostname, "id", id)
+		log = log.With("host", hostname, "id", id, "traceid", span.SpanContext().TraceID())
 
 		if len(requestLimiter) > 10 {
 			log.Debug("rate limiting queue",
@@ -75,7 +76,6 @@ func postAvro(writer *kafka.Writer) func(c echo.Context) error {
 		defer c.Request().Body.Close()
 
 		buffer := []kafka.Message{}
-
 		count := 0
 
 		for dec.HasNext() {
@@ -83,8 +83,14 @@ func postAvro(writer *kafka.Writer) func(c echo.Context) error {
 
 			err := dec.Decode(&e)
 			if err != nil {
-				log.Info("decode error", "err", err)
-				continue
+				avroSpan.AddEvent(
+					fmt.Sprintf("avro decode error: %s", err),
+					trace.WithAttributes(attribute.String("err", err.Error())),
+					trace.WithAttributes(attribute.Int("messages_read", count)),
+				)
+
+				log.Info("decode error", "err", err, "messages_read", count)
+				return c.NoContent(http.StatusBadRequest)
 			}
 
 			e.Hostname = hostname
@@ -93,8 +99,12 @@ func postAvro(writer *kafka.Writer) func(c echo.Context) error {
 
 			d, err := avro.Marshal(schema, e)
 			if err != nil {
+				avroSpan.AddEvent(
+					fmt.Sprintf("avro marshal error: %s", err),
+					trace.WithAttributes(attribute.String("err", err.Error())),
+				)
 				log.Warn("avro marshal error", "err", err)
-				continue
+				return c.NoContent(http.StatusInternalServerError)
 			}
 
 			count++
@@ -126,7 +136,7 @@ func postAvro(writer *kafka.Writer) func(c echo.Context) error {
 		if err != nil {
 			kafkaSpan.AddEvent("exception", trace.WithAttributes(attribute.String("exception.message", err.Error())))
 			log.Error("kafka write", "err", err)
-			return c.NoContent(http.StatusInternalServerError)
+			return c.NoContent(http.StatusBadGateway)
 		}
 
 		kafkaSpan.AddEvent("kafak accepted messages", trace.WithAttributes(attribute.Int("count", count)))

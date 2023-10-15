@@ -213,6 +213,7 @@ func isAvroFileName(name string) bool {
 
 func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, filePath string) error {
 	ctx, span := tracing.Tracer().Start(ctx, "upload", trace.WithSpanKind(trace.SpanKindClient))
+
 	defer span.End()
 
 	log = log.With("traceid", span.SpanContext().TraceID())
@@ -237,6 +238,13 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 		span.RecordError(err)
 		return err
 	}
+
+	stat, err := fh.Stat()
+	if err != nil {
+		span.RecordError(err)
+		return err
+	}
+	span.SetAttributes(attribute.Int64("size", stat.Size()))
 
 	reqCtx, cancel := context.WithTimeout(ctx, time.Second*30)
 	defer cancel()
