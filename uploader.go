@@ -25,6 +25,8 @@ import (
 	"go.ntppool.org/common/version"
 )
 
+const workerCount = 2
+
 type uploadSet struct {
 	client              *http.Client
 	fl                  *fileLock
@@ -174,7 +176,7 @@ func uploader(ctx context.Context, client *http.Client, logpath, apiURL string, 
 		}
 	})
 
-	for workerN := 1; workerN <= 2; workerN++ {
+	for workerN := 1; workerN <= workerCount; workerN++ {
 		workerN := workerN
 		log.Info("starting upload worker", "n", workerN)
 		g.Go(func() error {

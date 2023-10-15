@@ -47,10 +47,10 @@ func httpClient(cm apitls.CertificateProvider) (*http.Client, error) {
 			ResponseHeaderTimeout: 30 * time.Second,
 			ExpectContinueTimeout: 5 * time.Second,
 		},
+			otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
 			otelhttp.WithClientTrace(func(ctx context.Context) *httptrace.ClientTrace {
 				return otelhttptrace.NewClientTrace(ctx)
 			}),
-			otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
 		)
 		clientCache = &http.Client{
 			Transport: transport,

@@ -32,7 +32,7 @@ func postAvro(writer *kafka.Writer) func(c echo.Context) error {
 		ctx := c.Request().Context()
 		hostname := ctx.Value(CertificateKey).(string)
 		ctx, span := tracing.Tracer().Start(
-			ctx, "PostAvro",
+			ctx, "post_avro",
 			trace.WithAttributes(
 				attribute.String("hostname", hostname),
 			),
@@ -66,7 +66,7 @@ func postAvro(writer *kafka.Writer) func(c echo.Context) error {
 			return c.String(http.StatusTooManyRequests, "try later")
 		}
 
-		_, avroSpan := tracing.Tracer().Start(ctx, "PostAvro.ReadRequest")
+		_, avroSpan := tracing.Tracer().Start(ctx, "post_avro.read_request")
 
 		dec, err := ocf.NewDecoder(c.Request().Body)
 		if err != nil {
@@ -126,7 +126,7 @@ func postAvro(writer *kafka.Writer) func(c echo.Context) error {
 		avroSpan.End()
 
 		_, kafkaSpan := tracing.Tracer().Start(ctx,
-			"PostAvro.KafkaWrite",
+			"post_avro.kafka_write",
 			trace.WithAttributes(attribute.Int("count", len(buffer))),
 		)
 		defer kafkaSpan.End()

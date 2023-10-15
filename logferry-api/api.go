@@ -16,6 +16,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"golang.org/x/sync/errgroup"
 
 	"go.ntppool.org/common/apitls"
@@ -139,6 +140,11 @@ func (apisrv *APIServer) run(ctx context.Context, registry prometheus.Registerer
 
 	e := echo.New()
 	e.Use(otelecho.Middleware("logferry-api"))
+	e.Use(echo.WrapMiddleware(
+		otelhttp.NewMiddleware("api",
+			otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
+		),
+	))
 
 	e.Use(echoprometheus.NewMiddlewareWithConfig(echoprometheus.MiddlewareConfig{
 		Subsystem:  "logferry",
