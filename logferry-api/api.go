@@ -15,6 +15,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"golang.org/x/sync/errgroup"
 
 	"go.ntppool.org/common/apitls"
@@ -22,6 +23,7 @@ import (
 	kafconn "go.ntppool.org/common/kafka"
 	"go.ntppool.org/common/logger"
 	"go.ntppool.org/common/metricsserver"
+	"go.ntppool.org/common/tracing"
 	"go.ntppool.org/common/version"
 )
 
@@ -70,6 +72,11 @@ func main() {
 	g.Go(func() error {
 		healthSrv.SetLogger(log.WithGroup("health"))
 		return healthSrv.Listen(ctx, 4280)
+	})
+
+	tracing.InitTracer(ctx, &tracing.TracerConfig{
+		ServiceName: "logferry-api",
+		Environment: "prod",
 	})
 
 	metricssrv := metricsserver.New()
@@ -131,6 +138,7 @@ func (apisrv *APIServer) run(ctx context.Context, registry prometheus.Registerer
 	}
 
 	e := echo.New()
+	e.Use(otelecho.Middleware("logferry-api"))
 
 	e.Use(echoprometheus.NewMiddlewareWithConfig(echoprometheus.MiddlewareConfig{
 		Subsystem:  "logferry",

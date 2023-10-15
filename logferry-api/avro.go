@@ -7,8 +7,11 @@ import (
 	"github.com/hamba/avro/v2/ocf"
 	"github.com/labstack/echo/v4"
 	"github.com/segmentio/kafka-go"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"go.ntppool.org/common/logger"
+	"go.ntppool.org/common/tracing"
 
 	"github.com/abh/geodns/v3/querylog"
 )
@@ -24,16 +27,23 @@ func postAvro(writer *kafka.Writer) func(c echo.Context) error {
 	requestLimiter := make(chan bool, 20)
 
 	return func(c echo.Context) error {
-
-		ctx := c.Request().Context()
 		log := logger.Setup()
+		ctx := c.Request().Context()
 		hostname := ctx.Value(CertificateKey).(string)
+		ctx, span := tracing.Tracer().Start(
+			ctx, "PostAvro",
+			trace.WithAttributes(
+				attribute.String("hostname", hostname),
+			),
+		)
+		defer span.End()
 
 		if len(hostname) == 0 {
 			return c.NoContent(http.StatusUnauthorized)
 		}
 
 		id := c.Request().Header.Get("Request-ID")
+		span.SetAttributes(attribute.String("Request-ID", id))
 		log = log.With("host", hostname, "id", id)
 
 		if len(requestLimiter) > 10 {
@@ -49,6 +59,7 @@ func postAvro(writer *kafka.Writer) func(c echo.Context) error {
 				<-requestLimiter
 			}()
 		default:
+			span.SetAttributes(attribute.Bool("Rate-Limit", true))
 			c.Request().Close = true
 			c.Response().Header().Add("Retry-After", "5")
 			return c.String(http.StatusTooManyRequests, "try later")
@@ -96,7 +107,8 @@ func postAvro(writer *kafka.Writer) func(c echo.Context) error {
 			// log.Info("query", "name", e.Name)
 		}
 
-		log.Info("writing to kafka", "count", len(buffer))
+		span.AddEvent("kafka write", trace.WithAttributes(attribute.Int("count", len(buffer))))
+		// log.Info("writing to kafka", "count", len(buffer))
 
 		err = writer.WriteMessages(ctx, buffer...)
 		if err != nil {
@@ -108,6 +120,7 @@ func postAvro(writer *kafka.Writer) func(c echo.Context) error {
 			log.Error("avro decoder error", "err", dec.Error())
 		}
 
+		span.AddEvent("kafak accepted messages", trace.WithAttributes(attribute.Int("count", count)))
 		log.Info("accepted messages", "count", count)
 
 		return c.NoContent(http.StatusAccepted)
