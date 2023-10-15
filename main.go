@@ -9,9 +9,11 @@ import (
 	"os/signal"
 
 	"github.com/prometheus/client_golang/prometheus/collectors"
+
 	"go.ntppool.org/common/apitls"
 	"go.ntppool.org/common/logger"
 	"go.ntppool.org/common/metricsserver"
+	"go.ntppool.org/common/tracing"
 	"go.ntppool.org/common/version"
 )
 
@@ -60,6 +62,11 @@ func run(ctx context.Context) error {
 		dumpJSON(flag.Args())
 		os.Exit(0)
 	}
+
+	tracing.InitTracer(ctx, &tracing.TracerConfig{
+		ServiceName: "logferry",
+		Environment: "prod",
+	})
 
 	log.Info("logferry", "version", version.Version())
 

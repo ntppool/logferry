@@ -74,11 +74,6 @@ func main() {
 		return healthSrv.Listen(ctx, 4280)
 	})
 
-	tracing.InitTracer(ctx, &tracing.TracerConfig{
-		ServiceName: "logferry-api",
-		Environment: "prod",
-	})
-
 	metricssrv := metricsserver.New()
 	g.Go(func() error {
 		return metricssrv.ListenAndServe(ctx, 4281)
@@ -122,6 +117,11 @@ func NewAPIServer(ctx context.Context, conf Config) (*APIServer, error) {
 func (apisrv *APIServer) run(ctx context.Context, registry prometheus.Registerer) error {
 	log := logger.Setup()
 	conf := apisrv.conf
+
+	tracing.InitTracer(ctx, &tracing.TracerConfig{
+		ServiceName: "logferry-api",
+		Environment: "prod",
+	})
 
 	listen := ":4200"
 
