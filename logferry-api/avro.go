@@ -65,7 +65,7 @@ func postAvro(writer *kafka.Writer) func(c echo.Context) error {
 			return c.String(http.StatusTooManyRequests, "try later")
 		}
 
-		_, avroSpan := tracing.Tracer().Start(ctx, "read request")
+		_, avroSpan := tracing.Tracer().Start(ctx, "PostAvro.ReadRequest")
 
 		dec, err := ocf.NewDecoder(c.Request().Body)
 		if err != nil {
@@ -109,10 +109,14 @@ func postAvro(writer *kafka.Writer) func(c echo.Context) error {
 
 			// log.Info("query", "name", e.Name)
 		}
+		if dec.Error() != nil {
+			avroSpan.AddEvent("exception", trace.WithAttributes(attribute.String("exception.message", dec.Error().Error())))
+			log.Error("avro decoder error", "err", dec.Error())
+		}
 		avroSpan.End()
 
 		_, kafkaSpan := tracing.Tracer().Start(ctx,
-			"kafka write",
+			"PostAvro.KafkaWrite",
 			trace.WithAttributes(attribute.Int("count", len(buffer))),
 		)
 		defer kafkaSpan.End()
@@ -120,12 +124,9 @@ func postAvro(writer *kafka.Writer) func(c echo.Context) error {
 
 		err = writer.WriteMessages(ctx, buffer...)
 		if err != nil {
+			kafkaSpan.AddEvent("exception", trace.WithAttributes(attribute.String("exception.message", err.Error())))
 			log.Error("kafka write", "err", err)
 			return c.NoContent(http.StatusInternalServerError)
-		}
-
-		if dec.Error() != nil {
-			log.Error("avro decoder error", "err", dec.Error())
 		}
 
 		kafkaSpan.AddEvent("kafak accepted messages", trace.WithAttributes(attribute.Int("count", count)))

@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v4"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func (srv *APIServer) certificateMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
@@ -14,6 +16,9 @@ func (srv *APIServer) certificateMiddleware(next echo.HandlerFunc) echo.HandlerF
 		_, name := srv.getVerifiedCert(c.Request().TLS.VerifiedChains)
 		ctx := context.WithValue(c.Request().Context(), CertificateKey, name)
 		rctx := c.Request().WithContext(ctx)
+		if span := trace.SpanFromContext(ctx); span != nil {
+			span.SetAttributes(attribute.String("hostname", name))
+		}
 		c.SetRequest(rctx)
 		return next(c)
 	}
