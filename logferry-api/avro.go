@@ -223,7 +223,8 @@ func (ah *AvroHandler) readPostedFile(ctx context.Context, req *http.Request) (*
 
 	sha := sha256.New()
 	rd := io.TeeReader(req.Body, sha)
-	cnt, err := io.Copy(fh, rd)
+	buf := make([]byte, 1024*256)
+	cnt, err := io.CopyBuffer(fh, rd, buf)
 	if err != nil {
 		return nil, "", cnt, err
 	}
