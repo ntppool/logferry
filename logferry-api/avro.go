@@ -221,8 +221,11 @@ func (ah *AvroHandler) readPostedFile(ctx context.Context, req *http.Request) (*
 		return nil, "", 0, err
 	}
 
+	// geodns is configred to 5MB files, so 20 should be plenty
+	body := io.LimitReader(req.Body, 20*1024*1024)
+
 	sha := sha256.New()
-	rd := io.TeeReader(req.Body, sha)
+	rd := io.TeeReader(body, sha)
 	buf := make([]byte, 1024*256)
 	cnt, err := io.CopyBuffer(fh, rd, buf)
 	if err != nil {
