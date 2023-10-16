@@ -179,8 +179,13 @@ func (apisrv *APIServer) run(ctx context.Context, registry prometheus.Registerer
 
 	NewWriterMetrics(writer, registry, "logferry_kafka")
 
+	avroHandler, err := NewAvroHandler(writer)
+	if err != nil {
+		return err
+	}
+
 	apiEcho := e.Group("/api/v1", apisrv.certificateMiddleware)
-	apiEcho.POST("/geodns/avro", postAvro(writer))
+	apiEcho.POST("/geodns/avro", avroHandler.Post)
 
 	hsrv := http.Server{
 		Addr:    listen,
