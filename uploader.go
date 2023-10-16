@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -225,6 +228,7 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 	_, baseName := path.Split(filePath)
 
 	span.SetAttributes(attribute.String("file", baseName))
+	log = log.With("file", baseName)
 
 	if !up.fl.Lock(filePath) {
 		err := fmt.Errorf("%s is already being uploaded", baseName)
@@ -235,13 +239,12 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 
 	timer := prometheus.NewTimer(up.uploadTimeHistogram)
 
-	log = log.With("file", baseName)
-
 	fh, err := os.Open(filePath)
 	if err != nil {
 		span.RecordError(err)
 		return err
 	}
+	defer fh.Close()
 
 	stat, err := fh.Stat()
 	if err != nil {
@@ -253,13 +256,27 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 	reqCtx, cancel := context.WithTimeout(ctx, time.Second*25)
 	defer cancel()
 
+	sha := sha256.New()
+	_, err = io.Copy(sha, fh)
+	if err != nil {
+		return err
+	}
+
+	_, err = fh.Seek(0, io.SeekStart)
+	if err != nil {
+		return err
+	}
+
 	req, err := http.NewRequestWithContext(reqCtx, "POST", up.apiURL, fh)
 	if err != nil {
 		span.RecordError(err)
 		return err
 	}
+
 	req.Header.Add("Request-ID", id)
 	req.Header.Add("User-Agent", "logferry/"+version.Version())
+	req.Header.Add("file-size", strconv.FormatInt(stat.Size(), 10))
+	req.Header.Add("content-sha256", base64.StdEncoding.EncodeToString(sha.Sum(nil)))
 
 	resp, err := up.client.Do(req)
 	if err != nil {
