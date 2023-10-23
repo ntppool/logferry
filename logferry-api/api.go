@@ -198,7 +198,7 @@ func (apisrv *APIServer) run(ctx context.Context, registry prometheus.Registerer
 			GetCertificate:        cm.GetCertificate,
 			VerifyPeerCertificate: apisrv.verifyClient,
 		},
-		ReadTimeout:  30 * time.Second,
+		ReadTimeout:  25 * time.Second, // shorter than the 30 second client timeout
 		WriteTimeout: 15 * time.Second,
 	}
 

@@ -54,7 +54,7 @@ func httpClient(cm apitls.CertificateProvider) (*http.Client, error) {
 		)
 		clientCache = &http.Client{
 			Transport: transport,
-			Timeout:   20 * time.Second,
+			Timeout:   35 * time.Second, // should get timed out by the transport before this
 		}
 	})
 
