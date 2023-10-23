@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/hamba/avro/v2"
 	"github.com/hamba/avro/v2/ocf"
@@ -25,22 +26,45 @@ import (
 )
 
 type AvroHandler struct {
+	clientTimeout  time.Duration // for the config API
 	schema         avro.Schema
 	writer         *kafka.Writer
 	requestLimiter chan bool
 }
 
-func NewAvroHandler(writer *kafka.Writer) (*AvroHandler, error) {
+func NewAvroHandler(writer *kafka.Writer, timeoutStick time.Duration) (*AvroHandler, error) {
 	schema, err := querylog.AvroSchema()
 	if err != nil {
 		return nil, fmt.Errorf("avro schema setup: %w", err)
 	}
 
 	return &AvroHandler{
+		clientTimeout:  timeoutStick + 5*time.Second,
 		schema:         schema,
 		writer:         writer,
 		requestLimiter: make(chan bool, 20),
 	}, nil
+}
+
+func (ah *AvroHandler) Config(c echo.Context) error {
+	log := logger.Setup()
+	ctx := c.Request().Context()
+	hostname := ctx.Value(CertificateKey).(string)
+	ctx, span := tracing.Tracer().Start(
+		ctx, "config",
+		trace.WithAttributes(
+			attribute.String("hostname", hostname),
+		),
+	)
+	defer span.End()
+	log = log.With("host", hostname, "traceid", span.SpanContext().TraceID())
+
+	return c.JSON(http.StatusOK, struct {
+		Timeout time.Duration
+	}{
+		Timeout: ah.clientTimeout,
+	})
+
 }
 
 func (ah *AvroHandler) Post(c echo.Context) error {

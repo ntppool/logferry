@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -138,6 +139,41 @@ func uploader(ctx context.Context, client *http.Client, logpath, apiURL string, 
 	}
 
 	g.Go(func() error {
+		ctx, span := tracing.Tracer().Start(ctx, "get_config")
+		defer span.End()
+		configURL := apiURL + "api/v1/config"
+		log.Info("config", "url", configURL)
+
+		req, err := http.NewRequestWithContext(ctx, "GET", configURL, nil)
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			conf := struct{ Timeout time.Duration }{}
+			data, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil
+			}
+			err = json.Unmarshal(data, &conf)
+			if err != nil {
+				return err
+			}
+			client.Timeout = conf.Timeout
+			log.Info("new timeout", "timeout", client.Timeout)
+		} else {
+			log.Warn("config status", "code", resp.StatusCode, "status", resp.Status)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
 		first := true
 		for {
 
@@ -267,7 +303,11 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(reqCtx, "POST", up.apiURL, fh)
+	req, err := http.NewRequestWithContext(
+		reqCtx, "POST",
+		up.apiURL+"api/v1/geodns/avro",
+		fh,
+	)
 	if err != nil {
 		span.RecordError(err)
 		return err

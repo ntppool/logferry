@@ -44,7 +44,7 @@ func httpClient(cm apitls.CertificateProvider) (*http.Client, error) {
 			IdleConnTimeout: 15 * time.Second,
 
 			TLSHandshakeTimeout:   5 * time.Second,
-			ResponseHeaderTimeout: 30 * time.Second,
+			ResponseHeaderTimeout: 60 * time.Second, // todo: set from config API
 			ExpectContinueTimeout: 5 * time.Second,
 		},
 			otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),

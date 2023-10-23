@@ -28,6 +28,10 @@ import (
 	"go.ntppool.org/common/version"
 )
 
+// metric for timeouts to settle around, clients
+// a little longer, servers a little shorter
+const timeoutStick = 75 * time.Second
+
 type APIServer struct {
 	kaf  *kafconn.Kafka
 	conf Config
@@ -179,13 +183,23 @@ func (apisrv *APIServer) run(ctx context.Context, registry prometheus.Registerer
 
 	NewWriterMetrics(writer, registry, "logferry_kafka")
 
-	avroHandler, err := NewAvroHandler(writer)
+	avroHandler, err := NewAvroHandler(writer, timeoutStick)
 	if err != nil {
 		return err
 	}
 
 	apiEcho := e.Group("/api/v1", apisrv.certificateMiddleware)
 	apiEcho.POST("/geodns/avro", avroHandler.Post)
+	apiEcho.GET("/config", avroHandler.Config)
+
+	writeTimeout := time.Duration(float64(timeoutStick) * 0.1)
+	readTimeout := time.Duration(float64(timeoutStick) * 0.85)
+	if writeTimeout < 5*time.Second {
+		log.Warn("write timeout got set too short", "timeout", writeTimeout)
+		writeTimeout = 5 * time.Second
+	}
+
+	log.Info("server timeouts", "writetimeout", writeTimeout, "readtimeout", readTimeout)
 
 	hsrv := http.Server{
 		Addr:    listen,
@@ -198,8 +212,8 @@ func (apisrv *APIServer) run(ctx context.Context, registry prometheus.Registerer
 			GetCertificate:        cm.GetCertificate,
 			VerifyPeerCertificate: apisrv.verifyClient,
 		},
-		ReadTimeout:  25 * time.Second, // shorter than the 30 second client timeout
-		WriteTimeout: 15 * time.Second,
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
 	}
 
 	go func() {

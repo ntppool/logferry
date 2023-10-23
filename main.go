@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"os/signal"
 
@@ -94,7 +95,15 @@ func run(ctx context.Context) error {
 
 	version.RegisterMetric("logferry", metricssrv.Registry())
 
-	err = uploader(ctx, client, *path, *upstreamAPI, metricssrv.Registry())
+	upstreamURL, err := url.Parse(*upstreamAPI)
+	if err != nil {
+		return err
+	}
+
+	upstreamURL.Path = "/"
+	log.Info("upstream", "url", upstreamURL.String())
+
+	err = uploader(ctx, client, *path, upstreamURL.String(), metricssrv.Registry())
 	if err != nil {
 		return err
 	}
