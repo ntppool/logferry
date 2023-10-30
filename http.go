@@ -3,60 +3,142 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptrace"
-	"sync"
 	"time"
 
 	"go.ntppool.org/common/apitls"
+	"go.ntppool.org/common/logger"
+	"go.ntppool.org/common/tracing"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-var clientCache *http.Client
-var onehttpClient sync.Once
+type httpClientManager struct {
+	client *http.Client
 
-func httpClient(cm apitls.CertificateProvider) (*http.Client, error) {
+	currentTimeout time.Duration
+	tlsConfig      *tls.Config
+	apiURL         string
+}
 
-	var clientErr error
+func NewHTTPClientManager(certProvider apitls.CertificateProvider, apiURL string) (*httpClientManager, error) {
+	capool, err := apitls.CAPool()
+	if err != nil {
+		return nil, err
+	}
 
-	onehttpClient.Do(func() {
-		capool, err := apitls.CAPool()
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify:   false,
+		GetClientCertificate: certProvider.GetClientCertificate,
+		RootCAs:              capool,
+		MinVersion:           tls.VersionTLS12,
+		MaxVersion:           tls.VersionTLS13,
+	}
+
+	cm := &httpClientManager{
+		tlsConfig: tlsConfig,
+		apiURL:    apiURL,
+	}
+
+	cm.client = &http.Client{}
+
+	// set transport and timeouts
+	cm.SetTimeout(60 * time.Second)
+
+	go func() {
+		for {
+			// get timeouts from server
+			cm.getConfig(context.Background())
+			time.Sleep(1 * time.Hour)
+		}
+	}()
+
+	return cm, nil
+}
+
+func (cm *httpClientManager) SetTimeout(baseTimeout time.Duration) {
+
+	if baseTimeout == cm.currentTimeout {
+		return
+	}
+
+	cm.currentTimeout = baseTimeout
+
+	baseTimeoutMs := baseTimeout.Milliseconds()
+
+	responseHeaderTimeout := time.Duration(time.Millisecond * time.Duration(float64(baseTimeoutMs)*0.85))
+
+	log := logger.Setup()
+	log.Info("timeouts", "responseHeader", responseHeaderTimeout)
+
+	tr := otelhttp.NewTransport(&http.Transport{
+		TLSClientConfig: cm.tlsConfig,
+
+		MaxIdleConns:    3,
+		IdleConnTimeout: 15 * time.Second,
+
+		TLSHandshakeTimeout:   5 * time.Second,
+		ResponseHeaderTimeout: responseHeaderTimeout,
+		ExpectContinueTimeout: 5 * time.Second,
+	},
+		otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
+		otelhttp.WithClientTrace(func(ctx context.Context) *httptrace.ClientTrace {
+			return otelhttptrace.NewClientTrace(ctx)
+		}),
+	)
+
+	cm.client.Transport = tr
+	cm.client.Timeout = baseTimeout
+
+}
+
+func (cm *httpClientManager) Client() *http.Client {
+	return cm.client
+}
+
+func (cm *httpClientManager) APIBase() string {
+	return cm.apiURL
+}
+
+func (cm *httpClientManager) getConfig(ctx context.Context) error {
+	ctx, span := tracing.Tracer().Start(ctx, "get_config")
+	defer span.End()
+
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	log := logger.Setup()
+
+	configURL := cm.apiURL + "api/v1/config"
+	log.Info("config", "url", configURL)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", configURL, nil)
+	if err != nil {
+		span.RecordError(err)
+		return err
+	}
+
+	resp, err := cm.Client().Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		conf := struct{ Timeout time.Duration }{}
+		data, err := io.ReadAll(resp.Body)
 		if err != nil {
-			clientErr = err
-			return
+			return nil
 		}
-
-		tlsConfig := &tls.Config{
-			InsecureSkipVerify:   false,
-			GetClientCertificate: cm.GetClientCertificate,
-			RootCAs:              capool,
-			MinVersion:           tls.VersionTLS12,
-			MaxVersion:           tls.VersionTLS12,
+		err = json.Unmarshal(data, &conf)
+		if err != nil {
+			return err
 		}
-
-		// tlsConfig.BuildNameToCertificate()
-
-		transport := otelhttp.NewTransport(&http.Transport{
-			TLSClientConfig: tlsConfig,
-
-			MaxIdleConns:    3,
-			IdleConnTimeout: 15 * time.Second,
-
-			TLSHandshakeTimeout:   5 * time.Second,
-			ResponseHeaderTimeout: 60 * time.Second, // todo: set from config API
-			ExpectContinueTimeout: 5 * time.Second,
-		},
-			otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
-			otelhttp.WithClientTrace(func(ctx context.Context) *httptrace.ClientTrace {
-				return otelhttptrace.NewClientTrace(ctx)
-			}),
-		)
-		clientCache = &http.Client{
-			Transport: transport,
-			Timeout:   35 * time.Second, // should get timed out by the transport before this
-		}
-	})
-
-	return clientCache, clientErr
+		cm.SetTimeout(conf.Timeout)
+	} else {
+		log.Warn("config status", "code", resp.StatusCode, "status", resp.Status)
+	}
+	return nil
 }

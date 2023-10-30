@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -32,13 +31,13 @@ import (
 const workerCount = 2
 
 type uploadSet struct {
-	client              *http.Client
+	client              *httpClientManager
 	fl                  *fileLock
 	apiURL              string
 	uploadTimeHistogram prometheus.Histogram
 }
 
-func uploader(ctx context.Context, client *http.Client, logpath, apiURL string, metrics prometheus.Registerer) error {
+func uploader(ctx context.Context, clientManager *httpClientManager, logpath string, metrics prometheus.Registerer) error {
 	log := logger.Setup()
 
 	watcher, err := fsnotify.NewWatcher()
@@ -132,46 +131,11 @@ func uploader(ctx context.Context, client *http.Client, logpath, apiURL string, 
 	metrics.MustRegister(uploadTimeHistogram)
 
 	up := uploadSet{
-		client:              client,
+		client:              clientManager,
 		fl:                  NewFileLock(),
-		apiURL:              apiURL,
+		apiURL:              clientManager.APIBase(),
 		uploadTimeHistogram: uploadTimeHistogram,
 	}
-
-	g.Go(func() error {
-		ctx, span := tracing.Tracer().Start(ctx, "get_config")
-		defer span.End()
-		configURL := apiURL + "api/v1/config"
-		log.Info("config", "url", configURL)
-
-		req, err := http.NewRequestWithContext(ctx, "GET", configURL, nil)
-		if err != nil {
-			span.RecordError(err)
-			return err
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode == http.StatusOK {
-			conf := struct{ Timeout time.Duration }{}
-			data, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil
-			}
-			err = json.Unmarshal(data, &conf)
-			if err != nil {
-				return err
-			}
-			client.Timeout = conf.Timeout
-			log.Info("new timeout", "timeout", client.Timeout)
-		} else {
-			log.Warn("config status", "code", resp.StatusCode, "status", resp.Status)
-		}
-		return nil
-	})
 
 	g.Go(func() error {
 		first := true
@@ -318,9 +282,11 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 	req.Header.Add("file-size", strconv.FormatInt(stat.Size(), 10))
 	req.Header.Add("content-sha256", base64.StdEncoding.EncodeToString(sha.Sum(nil)))
 
-	resp, err := up.client.Do(req)
+	cl := up.client.Client()
+
+	resp, err := cl.Do(req)
 	if err != nil {
-		up.client.CloseIdleConnections()
+		cl.CloseIdleConnections()
 		span.RecordError(err)
 		return err
 	}

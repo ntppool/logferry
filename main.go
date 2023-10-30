@@ -88,7 +88,15 @@ func run(ctx context.Context) error {
 		CertificateProvider: cm.GetClientCertificate,
 	})
 
-	client, err := httpClient(cm)
+	upstreamURL, err := url.Parse(*upstreamAPI)
+	if err != nil {
+		return err
+	}
+
+	upstreamURL.Path = "/"
+	log.Info("upstream", "url", upstreamURL.String())
+
+	clientManager, err := NewHTTPClientManager(cm, upstreamURL.String())
 	if err != nil {
 		return logger.NewError("http setup", "err", err)
 	}
@@ -102,15 +110,7 @@ func run(ctx context.Context) error {
 
 	version.RegisterMetric("logferry", metricssrv.Registry())
 
-	upstreamURL, err := url.Parse(*upstreamAPI)
-	if err != nil {
-		return err
-	}
-
-	upstreamURL.Path = "/"
-	log.Info("upstream", "url", upstreamURL.String())
-
-	err = uploader(ctx, client, *path, upstreamURL.String(), metricssrv.Registry())
+	err = uploader(ctx, clientManager, *path, metricssrv.Registry())
 	if err != nil {
 		return err
 	}

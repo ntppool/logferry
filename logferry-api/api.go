@@ -30,7 +30,7 @@ import (
 
 // metric for timeouts to settle around, clients
 // a little longer, servers a little shorter
-const timeoutStick = 75 * time.Second
+const timeoutStick = 80 * time.Second
 
 type APIServer struct {
 	kaf  *kafconn.Kafka
@@ -44,11 +44,6 @@ func main() {
 	log.Info("Logferry API server", "version", version.Version())
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill, syscall.SIGTERM)
-
-	go func() {
-		<-ctx.Done()
-		log.Info("shutting down")
-	}()
 
 	conf, err := LoadConfig()
 	if err != nil {
