@@ -253,7 +253,7 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 	}
 	span.SetAttributes(attribute.Int64("size", stat.Size()))
 
-	reqCtx, cancel := context.WithTimeout(ctx, time.Second*25)
+	reqCtx, cancel := context.WithTimeout(ctx, time.Second*120) // todo: get from config
 	defer cancel()
 
 	sha := sha256.New()
