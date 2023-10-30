@@ -118,7 +118,7 @@ func (ah *AvroHandler) Post(c echo.Context) error {
 
 	expectedDataSize := c.Request().Header.Get("file-size")
 	expectedSha := c.Request().Header.Get("content-sha256")
-	log.Info("expected data", "size", expectedDataSize, "sha256", expectedSha)
+	log.Debug("expected data", "size", expectedDataSize, "sha256", expectedSha)
 
 	if len(expectedDataSize) > 0 {
 		span.SetAttributes(attribute.Int64("Size", size))

@@ -64,11 +64,6 @@ func run(ctx context.Context) error {
 		os.Exit(0)
 	}
 
-	tracing.InitTracer(ctx, &tracing.TracerConfig{
-		ServiceName: "logferry",
-		Environment: "prod",
-	})
-
 	log.Info("logferry", "version", version.Version())
 
 	// todo: unless upstream API isn't https
@@ -80,6 +75,18 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return logger.NewError("certman setup", "err", err)
 	}
+
+	capool, err := apitls.CAPool()
+	if err != nil {
+		return err
+	}
+
+	tracing.InitTracer(ctx, &tracing.TracerConfig{
+		ServiceName:         "logferry",
+		Environment:         "prod",
+		RootCAs:             capool,
+		CertificateProvider: cm.GetClientCertificate,
+	})
 
 	client, err := httpClient(cm)
 	if err != nil {
