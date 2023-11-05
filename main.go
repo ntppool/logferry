@@ -8,8 +8,10 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/collectors"
+	"golang.org/x/sync/errgroup"
 
 	"go.ntppool.org/common/apitls"
 	"go.ntppool.org/common/logger"
@@ -81,39 +83,54 @@ func run(ctx context.Context) error {
 		return err
 	}
 
-	tracing.InitTracer(ctx, &tracing.TracerConfig{
-		ServiceName:         "logferry",
-		Environment:         "prod",
-		RootCAs:             capool,
-		CertificateProvider: cm.GetClientCertificate,
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		tpShutdown, err := tracing.InitTracer(ctx, &tracing.TracerConfig{
+			ServiceName:         "logferry",
+			Environment:         "prod",
+			RootCAs:             capool,
+			CertificateProvider: cm.GetClientCertificate,
+		})
+		if err != nil {
+			return err
+		}
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return tpShutdown(shutdownCtx)
 	})
 
-	upstreamURL, err := url.Parse(*upstreamAPI)
-	if err != nil {
-		return err
-	}
-
-	upstreamURL.Path = "/"
-	log.Info("upstream", "url", upstreamURL.String())
-
-	clientManager, err := NewHTTPClientManager(cm, upstreamURL.String())
-	if err != nil {
-		return logger.NewError("http setup", "err", err)
-	}
-
 	metricssrv := metricsserver.New()
-	go metricssrv.ListenAndServe(ctx, 9097)
 
-	metricssrv.Registry().MustRegister(
-		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-	)
+	g.Go(func() error {
+		metricssrv.Registry().MustRegister(
+			collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+		)
+		version.RegisterMetric("logferry", metricssrv.Registry())
+		return metricssrv.ListenAndServe(ctx, 9097)
 
-	version.RegisterMetric("logferry", metricssrv.Registry())
+	})
 
-	err = uploader(ctx, clientManager, *path, metricssrv.Registry())
-	if err != nil {
-		return err
-	}
+	g.Go(func() error {
+		return directoryCleaner(ctx, *path)
+	})
 
-	return nil
+	g.Go(func() error {
+		upstreamURL, err := url.Parse(*upstreamAPI)
+		if err != nil {
+			return err
+		}
+
+		upstreamURL.Path = "/"
+		log.Info("upstream", "url", upstreamURL.String())
+
+		clientManager, err := NewHTTPClientManager(cm, upstreamURL.String())
+		if err != nil {
+			return logger.NewError("http setup", "err", err)
+		}
+		return uploader(ctx, clientManager, *path, metricssrv.Registry())
+	})
+
+	return g.Wait()
 }
