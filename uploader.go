@@ -139,7 +139,19 @@ func uploader(ctx context.Context, clientManager *httpClientManager, logpath str
 
 	g.Go(func() error {
 		first := true
+
+		// start with the new files for a few moments
+		time.Sleep(15 * time.Second)
+
 		for {
+			if !(first || len(processCh) < 2) {
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-time.After(20 * time.Second):
+					continue // check queue length again
+				}
+			}
 
 			dir, err := os.ReadDir(logpath)
 			if err != nil {
@@ -153,15 +165,6 @@ func uploader(ctx context.Context, clientManager *httpClientManager, logpath str
 				}
 				slices.Sort(files)
 				for _, n := range files {
-					ok := first || len(processCh) < 10
-					if !ok {
-						select {
-						case <-ctx.Done():
-							return nil
-						case <-time.After(2 * time.Second):
-							// just slow down a bit if we are retrying
-						}
-					}
 					fullName := path.Join(logpath, n)
 					if !up.fl.IsLocked(fullName) {
 						processCh <- fullName
@@ -174,7 +177,7 @@ func uploader(ctx context.Context, clientManager *httpClientManager, logpath str
 			select {
 			case <-ctx.Done():
 				return nil
-			case <-time.After(5 * time.Minute):
+			case <-time.After(10 * time.Minute):
 			}
 		}
 	})
