@@ -110,6 +110,8 @@ github.com/xdg-go/stringprep v1.0.4/go.mod h1:mPGuuIYwz7CmR2bT9j4GbQqutWS1zV24gi
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 go.ntppool.org/common v0.2.6 h1:lOBkTTJYKPGPHwsmqcGOrH4PTIBMo+7mgb9fGsWgdjg=
 go.ntppool.org/common v0.2.6/go.mod h1:pqJD5pKizHE/a4BmvVdg4ne6LJAiwluaF19gzWcwp64=
+go.ntppool.org/common v0.2.7-0.20240120065929-df2285d35543 h1:Xk7B5qjkKGHbbHYt7UlxFbBwI0pKNlbU5L0QRu+MSPA=
+go.ntppool.org/common v0.2.7-0.20240120065929-df2285d35543/go.mod h1:7gNYzGKJyVDo3g4NDH96ENTu3LVFJXyumNGAgmQkkrY=
 go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.47.0 h1:LxU1CtJeUgR3sSIoEqTWuJ1VFAgybxpqKZjeTAFvDfo=
 go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.47.0/go.mod h1:kNOJ6ovdGbJ/L8Oq4+5yftrkp78Z8V4M8H9aJcMe46w=
 go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.47.0 h1:rw+yB4sMhufNzbVHGG9SDMSrw1CKSnRqfjJnMpAH4dE=

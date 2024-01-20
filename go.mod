@@ -11,7 +11,7 @@ require (
 	github.com/labstack/echo/v4 v4.11.4
 	github.com/prometheus/client_golang v1.18.0
 	github.com/segmentio/kafka-go v0.4.47
-	go.ntppool.org/common v0.2.6
+	go.ntppool.org/common v0.2.7-0.20240120065929-df2285d35543
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.47.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.47.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.47.0
