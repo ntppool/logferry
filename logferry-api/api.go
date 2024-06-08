@@ -200,8 +200,8 @@ func (apisrv *APIServer) run(ctx context.Context, registry prometheus.Registerer
 		Addr:    listen,
 		Handler: e,
 		TLSConfig: &tls.Config{
-			MinVersion:            tls.VersionTLS12,
-			MaxVersion:            tls.VersionTLS12,
+			MinVersion: tls.VersionTLS12,
+			// MaxVersion:            tls.VersionTLS13,
 			ClientCAs:             caCertPool,
 			ClientAuth:            tls.VerifyClientCertIfGiven,
 			GetCertificate:        cm.GetCertificate,
