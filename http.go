@@ -34,8 +34,8 @@ func NewHTTPClientManager(certProvider apitls.CertificateProvider, apiURL string
 		InsecureSkipVerify:   false,
 		GetClientCertificate: certProvider.GetClientCertificate,
 		RootCAs:              capool,
-		MinVersion:           tls.VersionTLS12,
-		MaxVersion:           tls.VersionTLS13,
+		MinVersion:           tls.VersionTLS13,
+		// MaxVersion:           tls.VersionTLS13,
 	}
 
 	cm := &httpClientManager{
