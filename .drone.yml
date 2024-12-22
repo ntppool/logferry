@@ -21,7 +21,7 @@ steps:
         memory: 100MiB
 
   - name: test
-    image: golang:1.22.4
+    image: golang:1.23.4
     volumes:
       - name: go
         path: /go
@@ -39,7 +39,7 @@ steps:
         memory: 2GiB
 
   - name: goreleaser
-    image: golang:1.22.4
+    image: golang:1.23.4
     resources:
       requests:
         cpu: 6000
@@ -101,7 +101,7 @@ steps:
     depends_on: [goreleaser]
 
   - name: fury-publish
-    image: golang:1.22.4
+    image: golang:1.23.4
     resources:
       requests:
         cpu: 250
@@ -196,6 +196,6 @@ trigger:
     - publish
 ---
 kind: signature
-hmac: 885e2a21b7b35d9d5680a394d447f61565b6c75ddc9b84ae24ad46c6f4734aea
+hmac: 6d436d6f320c62abe07a51a86d5f9a7a6ee95f63e9c652a5d38d4c508f6bfbe8
 
 ...
