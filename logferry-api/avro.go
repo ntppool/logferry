@@ -64,7 +64,6 @@ func (ah *AvroHandler) Config(c echo.Context) error {
 	}{
 		Timeout: ah.clientTimeout,
 	})
-
 }
 
 func (ah *AvroHandler) Post(c echo.Context) error {
@@ -104,6 +103,7 @@ func (ah *AvroHandler) Post(c echo.Context) error {
 		span.SetAttributes(attribute.Bool("Rate-Limit", true))
 		c.Request().Close = true
 		c.Response().Header().Add("Retry-After", "5")
+		c.Response().Header().Add("Connection", "Close")
 		return c.String(http.StatusTooManyRequests, "try later")
 	}
 
@@ -165,7 +165,6 @@ func (ah *AvroHandler) Post(c echo.Context) error {
 	log.Info("accepted messages", "count", len(buffer))
 
 	return c.NoContent(http.StatusAccepted)
-
 }
 
 func (ah *AvroHandler) parseAvro(ctx context.Context, fh io.Reader, hostname string) ([]kafka.Message, error) {

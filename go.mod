@@ -7,17 +7,17 @@ require (
 	github.com/abh/geodns/v3 v3.3.3
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/hamba/avro/v2 v2.27.0
-	github.com/labstack/echo-contrib v0.17.1
+	github.com/labstack/echo-contrib v0.17.2
 	github.com/labstack/echo/v4 v4.13.3
 	github.com/prometheus/client_golang v1.20.5
 	github.com/segmentio/kafka-go v0.4.47
-	go.ntppool.org/common v0.3.0
+	go.ntppool.org/common v0.3.1
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.58.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.58.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.58.0
 	go.opentelemetry.io/otel v1.33.0
 	go.opentelemetry.io/otel/trace v1.33.0
-	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67
+	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8
 	golang.org/x/sync v0.10.0
 )
 
@@ -36,7 +36,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
-	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -50,7 +50,7 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/remychantenay/slog-otel v1.3.2 // indirect
 	github.com/samber/lo v1.47.0 // indirect
-	github.com/samber/slog-multi v1.2.4 // indirect
+	github.com/samber/slog-multi v1.3.3 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
@@ -75,16 +75,16 @@ require (
 	go.opentelemetry.io/otel/sdk v1.33.0 // indirect
 	go.opentelemetry.io/otel/sdk/log v0.9.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.33.0 // indirect
-	go.opentelemetry.io/proto/otlp v1.4.0 // indirect
-	golang.org/x/crypto v0.31.0 // indirect
+	go.opentelemetry.io/proto/otlp v1.5.0 // indirect
+	golang.org/x/crypto v0.32.0 // indirect
 	golang.org/x/mod v0.22.0 // indirect
-	golang.org/x/net v0.33.0 // indirect
-	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/net v0.34.0 // indirect
+	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
-	golang.org/x/time v0.8.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20241219192143-6b3ec007d9bb // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20241219192143-6b3ec007d9bb // indirect
-	google.golang.org/grpc v1.69.2 // indirect
-	google.golang.org/protobuf v1.36.0 // indirect
+	golang.org/x/time v0.9.0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20250115164207-1a7da9e5054f // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250115164207-1a7da9e5054f // indirect
+	google.golang.org/grpc v1.69.4 // indirect
+	google.golang.org/protobuf v1.36.3 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )

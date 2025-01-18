@@ -206,6 +206,7 @@ func uploader(ctx context.Context, clientManager *httpClientManager, logpath str
 					if err != nil {
 						log.Error("error uploading", "path", p, "err", err)
 						uploadErrorCounter.Inc()
+						up.client.Client().CloseIdleConnections()
 						continue
 					}
 					uploadOkCounter.Inc()
