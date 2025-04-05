@@ -17,6 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	_ "go.uber.org/automaxprocs"
 	"golang.org/x/sync/errgroup"
 
 	"go.ntppool.org/common/apitls"
@@ -38,7 +39,6 @@ type APIServer struct {
 }
 
 func main() {
-
 	log := logger.Setup()
 
 	log.Info("Logferry API server", "version", version.Version())
@@ -111,7 +111,6 @@ func NewAPIServer(ctx context.Context, conf Config) (*APIServer, error) {
 		kaf:  kaf,
 		conf: conf,
 	}, nil
-
 }
 
 func (apisrv *APIServer) run(ctx context.Context, registry prometheus.Registerer) error {
