@@ -109,7 +109,6 @@ func run(ctx context.Context) error {
 		)
 		version.RegisterMetric("logferry", metricssrv.Registry())
 		return metricssrv.ListenAndServe(ctx, 9097)
-
 	})
 
 	g.Go(func() error {

@@ -12,7 +12,6 @@ import (
 )
 
 func dumpJSON(files []string) {
-
 	log := logger.Setup()
 
 	for _, fileName := range files {

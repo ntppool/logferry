@@ -66,5 +66,4 @@ func directoryCleaner(ctx context.Context, logpath string) error {
 			return nil
 		}
 	}
-
 }

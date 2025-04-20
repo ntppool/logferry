@@ -9,7 +9,6 @@ import (
 )
 
 func NewWriterMetrics(writer *kafka.Writer, registry prometheus.Registerer, subsystem string) {
-
 	wm := writerMetrics{
 		registry:  registry,
 		subsystem: subsystem,
@@ -63,7 +62,6 @@ func (wm *writerMetrics) updateStats() {
 
 	wm.messages.Add(float64(ws.Messages))
 	wm.errors.Add(float64(ws.Errors))
-
 }
 
 // summary is registered into Prometheus registrerer, see newSummary below.

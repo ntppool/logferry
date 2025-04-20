@@ -60,7 +60,6 @@ func NewHTTPClientManager(certProvider apitls.CertificateProvider, apiURL string
 }
 
 func (cm *httpClientManager) SetTimeout(baseTimeout time.Duration) {
-
 	if baseTimeout == cm.currentTimeout {
 		return
 	}
@@ -92,7 +91,6 @@ func (cm *httpClientManager) SetTimeout(baseTimeout time.Duration) {
 
 	cm.client.Transport = tr
 	cm.client.Timeout = baseTimeout
-
 }
 
 func (cm *httpClientManager) Client() *http.Client {
