@@ -5,6 +5,39 @@ import (
 	"testing"
 )
 
+/*
+TLS Certificate Validation Tests (logferry-api/tls_test.go)
+
+WHAT IS BEING TESTED:
+- Domain suffix validation: Tests .mon.ntppool.dev and .ntppool.net suffixes
+- Priority order: Tests that .mon.ntppool.dev has precedence over .ntppool.net
+- Security edge cases: Tests against domain manipulation attempts
+- Certificate chain handling: Tests multiple certificates and chains
+- DNS name processing: Tests multiple DNS names per certificate
+- Case sensitivity: Tests that domain matching is case-sensitive
+- Empty input handling: Tests behavior with empty/nil certificate chains
+
+WHAT IS NOT BEING TESTED:
+- Certificate expiration validation
+- Certificate revocation checking
+- Certificate signature validation
+- Certificate authority validation
+- Certificate key usage validation
+- Client certificate mutual TLS handshake
+
+NOTES:
+- .mon.ntppool.dev has priority - Because it's used most frequently
+- Domain matching is case-sensitive
+- Subdomain depth is unlimited (e.g., very.deep.sub.domain.mon.ntppool.dev)
+
+QUESTIONS:
+- Should domain matching be case-insensitive to be more robust against certificate variations?
+- Should there be wildcard certificate support (e.g., *.mon.ntppool.dev)?
+- What happens if a certificate has both valid and invalid DNS names? Currently returns the first valid one - is this correct?
+- Should there be additional certificate validation beyond DNS name checking?
+*/
+
+// TestAPIServer_getVerifiedCert tests domain suffix validation and priority logic
 func TestAPIServer_getVerifiedCert(t *testing.T) {
 	srv := &APIServer{}
 
@@ -110,6 +143,7 @@ func TestAPIServer_getVerifiedCert(t *testing.T) {
 	}
 }
 
+// TestAPIServer_getVerifiedCert_MultipleCertificates tests certificate chain processing
 func TestAPIServer_getVerifiedCert_MultipleCertificates(t *testing.T) {
 	srv := &APIServer{}
 
@@ -138,6 +172,7 @@ func TestAPIServer_getVerifiedCert_MultipleCertificates(t *testing.T) {
 	}
 }
 
+// TestAPIServer_getVerifiedCert_MultipleChains tests multiple certificate chain handling
 func TestAPIServer_getVerifiedCert_MultipleChains(t *testing.T) {
 	srv := &APIServer{}
 
@@ -164,6 +199,7 @@ func TestAPIServer_getVerifiedCert_MultipleChains(t *testing.T) {
 	}
 }
 
+// TestAPIServer_getVerifiedCert_EmptyChains tests edge cases with empty/nil certificate chains
 func TestAPIServer_getVerifiedCert_EmptyChains(t *testing.T) {
 	srv := &APIServer{}
 
@@ -198,6 +234,7 @@ func TestAPIServer_getVerifiedCert_EmptyChains(t *testing.T) {
 	}
 }
 
+// TestAPIServer_verifyClient tests the client certificate verification wrapper function
 func TestAPIServer_verifyClient(t *testing.T) {
 	srv := &APIServer{}
 
@@ -249,6 +286,7 @@ func TestAPIServer_verifyClient(t *testing.T) {
 	}
 }
 
+// TestAPIServer_DomainValidationEdgeCases tests security edge cases and subdomain handling
 func TestAPIServer_DomainValidationEdgeCases(t *testing.T) {
 	srv := &APIServer{}
 

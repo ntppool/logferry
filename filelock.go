@@ -14,6 +14,9 @@ func NewFileLock() *fileLock {
 }
 
 func (fl *fileLock) IsLocked(name string) bool {
+	if name == "" {
+		return false
+	}
 	fl.mu.Lock()
 	defer fl.mu.Unlock()
 	_, ok := fl.m[name]
@@ -21,6 +24,9 @@ func (fl *fileLock) IsLocked(name string) bool {
 }
 
 func (fl *fileLock) Lock(name string) bool {
+	if name == "" {
+		return false
+	}
 	fl.mu.Lock()
 	defer fl.mu.Unlock()
 	if _, ok := fl.m[name]; ok {

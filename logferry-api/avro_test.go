@@ -18,6 +18,40 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
+/*
+Avro File Processing Tests (logferry-api/avro_test.go)
+
+WHAT IS BEING TESTED:
+- Constructor validation: NewAvroHandler() proper initialization including timeout calculation (+5s)
+- Configuration endpoint: Config() JSON response format
+- SHA256 validation: Tests that incorrect SHA256 headers result in BadRequest
+- File size validation: Tests that mismatched file sizes result in BadRequest
+- Size limits: readPostedFile() enforces 20MB limit 
+- Rate limiting: Tests that exceeding request limiter capacity returns 429
+- Authorization: Tests that missing hostname results in 401
+- Empty data handling: Tests SHA256 calculation for empty files
+- Temporary file handling: Tests file creation and cleanup
+
+WHAT IS NOT BEING TESTED:
+- Actual Avro schema validation and parsing (requires full setup)
+- Kafka message production (would need Kafka integration)
+- Complete request flow with valid Avro data
+- Memory usage with large files
+- Cleanup of temporary files in error scenarios
+- Concurrent request handling beyond rate limiting
+
+NOTES:
+- Client timeout = timeoutStick + 5s - So client times out after the server
+- Rate limiter capacity = 20 - To prevent overloading the Kafka server
+- 20MB limit is in the server - Located in avro.go line 248
+
+QUESTIONS:
+- Should there be different rate limits for different certificate types/hostnames?
+- What should happen if temporary file creation fails due to disk space?
+- Should the 20MB limit be configurable?
+*/
+
+// TestNewAvroHandler validates constructor creates properly initialized handler
 func TestNewAvroHandler(t *testing.T) {
 	writer := &kafka.Writer{}
 	timeoutStick := 60 * time.Second
@@ -49,6 +83,7 @@ func TestNewAvroHandler(t *testing.T) {
 	}
 }
 
+// TestAvroHandler_Config tests the configuration endpoint JSON response
 func TestAvroHandler_Config(t *testing.T) {
 	handler := &AvroHandler{
 		clientTimeout: 65 * time.Second,
@@ -79,6 +114,7 @@ func TestAvroHandler_Config(t *testing.T) {
 	}
 }
 
+// TestAvroHandler_readPostedFile_SHA256Calculation tests SHA256 hash calculation and file handling
 func TestAvroHandler_readPostedFile_SHA256Calculation(t *testing.T) {
 	handler := &AvroHandler{}
 
@@ -123,6 +159,7 @@ func TestAvroHandler_readPostedFile_SHA256Calculation(t *testing.T) {
 	}
 }
 
+// TestAvroHandler_readPostedFile_SizeLimit tests the 20MB file size limit enforcement
 func TestAvroHandler_readPostedFile_SizeLimit(t *testing.T) {
 	handler := &AvroHandler{}
 
@@ -183,6 +220,7 @@ func TestAvroHandler_readPostedFile_EmptyData(t *testing.T) {
 	}
 }
 
+// TestAvroHandler_Post_SizeValidation tests file size validation logic at HTTP layer
 func TestAvroHandler_Post_SizeValidation(t *testing.T) {
 	// Test size validation logic by testing mismatched sizes
 	handler := &AvroHandler{
@@ -213,6 +251,7 @@ func TestAvroHandler_Post_SizeValidation(t *testing.T) {
 	}
 }
 
+// TestAvroHandler_Post_SHA256Validation tests SHA256 validation at HTTP layer
 func TestAvroHandler_Post_SHA256Validation(t *testing.T) {
 	handler := &AvroHandler{
 		requestLimiter: make(chan bool, 20),
@@ -241,6 +280,7 @@ func TestAvroHandler_Post_SHA256Validation(t *testing.T) {
 	}
 }
 
+// TestAvroHandler_Post_RateLimiting tests the rate limiting functionality (capacity = 20)
 func TestAvroHandler_Post_RateLimiting(t *testing.T) {
 	// Create handler with small limiter for testing
 	handler := &AvroHandler{
@@ -282,6 +322,7 @@ func TestAvroHandler_Post_RateLimiting(t *testing.T) {
 	}
 }
 
+// TestAvroHandler_Post_MissingHostname tests authorization via certificate hostname validation
 func TestAvroHandler_Post_MissingHostname(t *testing.T) {
 	handler := &AvroHandler{
 		requestLimiter: make(chan bool, 20),

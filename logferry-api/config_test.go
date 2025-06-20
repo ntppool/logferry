@@ -5,6 +5,35 @@ import (
 	"testing"
 )
 
+/*
+Configuration Loading Tests (logferry-api/config_test.go)
+
+WHAT IS BEING TESTED:
+- Default behavior: Kafka defaults but empty TLS values when no env vars set
+- Environment override: Environment variables properly override defaults
+- Partial configuration: Mixed environment/default behavior works correctly
+- Empty string handling: Empty strings fall back to defaults for Kafka but remain empty for TLS
+- Struct integrity: All expected configuration fields exist and are accessible
+
+WHAT IS NOT BEING TESTED:
+- Invalid file paths in configuration
+- Configuration validation (checking if cert files exist)
+- Configuration reload/hot-reload functionality
+- Command-line flag integration
+- JSON file configuration support (commented out in code)
+- Configuration precedence order beyond env vars and defaults
+
+NOTES:
+- TLS fields have no defaults while Kafka fields do - intentional security behavior
+- Empty strings in env vars fall back to defaults for Kafka but remain empty for TLS
+
+QUESTIONS:
+- Should the system validate that certificate files exist and are readable?
+- What should happen with invalid file paths in configuration? (e.g., "/nonexistent/path.crt")
+- Should there be validation that TLS_CERT and TLS_KEY are both set or both empty?
+*/
+
+// TestLoadConfig_DefaultValues validates default behavior when no environment variables are set
 func TestLoadConfig_DefaultValues(t *testing.T) {
 	// Clear any existing environment variables
 	os.Unsetenv("TLS_CERT")
@@ -44,6 +73,7 @@ func TestLoadConfig_DefaultValues(t *testing.T) {
 	}
 }
 
+// TestLoadConfig_EnvironmentVariables tests that environment variables properly override defaults
 func TestLoadConfig_EnvironmentVariables(t *testing.T) {
 	// Set up test environment variables
 	testValues := map[string]string{
@@ -89,6 +119,7 @@ func TestLoadConfig_EnvironmentVariables(t *testing.T) {
 	}
 }
 
+// TestLoadConfig_PartialEnvironmentVariables tests mixed environment/default behavior
 func TestLoadConfig_PartialEnvironmentVariables(t *testing.T) {
 	// Clear all variables first
 	envVars := []string{"TLS_CERT", "TLS_KEY", "KAFKA_CA", "KAFKA_CERT", "KAFKA_KEY"}
@@ -132,6 +163,8 @@ func TestLoadConfig_PartialEnvironmentVariables(t *testing.T) {
 	}
 }
 
+// TestLoadConfig_EmptyEnvironmentVariables tests behavior when env vars are set to empty strings
+// This tests the configuration library behavior: empty strings fall back to defaults for Kafka
 func TestLoadConfig_EmptyEnvironmentVariables(t *testing.T) {
 	// Set environment variables to empty strings
 	envVars := []string{"TLS_CERT", "TLS_KEY", "KAFKA_CA", "KAFKA_CERT", "KAFKA_KEY"}
@@ -177,6 +210,7 @@ func TestLoadConfig_EmptyEnvironmentVariables(t *testing.T) {
 	}
 }
 
+// TestConfig_StructFields ensures all expected configuration fields exist (compilation test)
 func TestConfig_StructFields(t *testing.T) {
 	cfg := Config{}
 

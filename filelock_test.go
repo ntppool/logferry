@@ -6,6 +6,38 @@ import (
 	"testing"
 )
 
+/*
+File Locking System Tests (filelock_test.go)
+
+WHAT IS BEING TESTED:
+- Constructor validation: NewFileLock() returns properly initialized instance
+- Basic locking: Files can be locked successfully, including edge cases
+- Double locking prevention: Same file cannot be locked twice
+- Lock status checking: Lock state queries and isolation between filenames
+- Unlocking: Unlocked files can be locked again
+- Graceful error handling: Unlocking non-existent locks doesn't panic
+- Concurrency safety: Only one goroutine can acquire the same lock
+- Parallel locking: Different files can be locked simultaneously
+- Lock lifecycle: Repeated lock/unlock cycles work correctly
+- Empty string validation: Empty filenames are rejected (returns false)
+
+WHAT IS NOT BEING TESTED:
+- Memory cleanup after many lock/unlock cycles
+- Behavior with extremely long filenames (>1000 chars)
+- Performance under high contention
+- Lock timeouts or expiration
+- Persistence across process restarts
+- Path traversal protection in filenames
+
+NOTES:
+- Empty string filenames are NOT allowed - Lock("") and IsLocked("") return false
+
+QUESTIONS:
+- What's the maximum supported filename length? Should there be validation or limits?
+- Should there be any filename sanitization (e.g., path traversal protection)?
+*/
+
+// TestNewFileLock validates constructor creates properly initialized instance
 func TestNewFileLock(t *testing.T) {
 	fl := NewFileLock()
 	if fl == nil {
@@ -16,6 +48,7 @@ func TestNewFileLock(t *testing.T) {
 	}
 }
 
+// TestFileLock_Lock tests basic locking functionality including edge cases
 func TestFileLock_Lock(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -23,7 +56,7 @@ func TestFileLock_Lock(t *testing.T) {
 		want     bool
 	}{
 		{"lock new file", "test.avro", true},
-		{"lock empty string", "", true},
+		{"lock empty string", "", false},
 		{"lock file with spaces", "test file.avro", true},
 	}
 
@@ -38,6 +71,7 @@ func TestFileLock_Lock(t *testing.T) {
 	}
 }
 
+// TestFileLock_DoubleLock ensures the same file cannot be locked twice (critical for preventing duplicate uploads)
 func TestFileLock_DoubleLock(t *testing.T) {
 	fl := NewFileLock()
 	filename := "test.avro"
@@ -105,6 +139,7 @@ func TestFileLock_UnlockNonExistent(t *testing.T) {
 	// Test passes if no panic occurs
 }
 
+// TestFileLock_ConcurrentAccess tests that only one goroutine can acquire the same lock (core concurrency safety)
 func TestFileLock_ConcurrentAccess(t *testing.T) {
 	fl := NewFileLock()
 	filename := "concurrent.avro"

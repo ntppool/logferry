@@ -219,7 +219,7 @@ func uploader(ctx context.Context, clientManager *httpClientManager, logpath str
 }
 
 func isAvroFileName(name string) bool {
-	return strings.HasSuffix(name, ".avro")
+	return strings.HasSuffix(name, ".avro") && len(name) > 5
 }
 
 func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, filePath string) error {

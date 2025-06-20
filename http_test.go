@@ -9,6 +9,37 @@ import (
 	"go.ntppool.org/common/apitls"
 )
 
+/*
+HTTP Client Timeout Logic Tests (http_test.go)
+
+WHAT IS BEING TESTED:
+- Timeout calculation: Tests the 0.85 multiplier formula for response header timeouts
+- No-op behavior: Setting the same timeout twice should be a no-op
+- Precision edge cases: Tests very small timeouts and floating-point precision
+- Configuration application: Tests that timeouts are applied to both client and transport
+- Getter methods: Tests APIBase() and Client() accessor methods
+
+WHAT IS NOT BEING TESTED:
+- Actual network timeouts in practice
+- Interaction with real TLS handshakes
+- Transport connection pooling behavior
+- Error handling when timeout values are invalid
+- Concurrent timeout modifications
+- Memory leaks from transport recreation
+
+NOTES:
+- Uses 0.85 multiplier for response header timeout
+- No specific min/max timeout limits implemented
+
+QUESTIONS:
+- Why specifically 0.85 as the multiplier? Is this based on empirical testing or network analysis?
+- Should there be minimum/maximum timeout limits? (e.g., reject timeouts < 100ms or > 10 minutes)
+- What should happen with zero or negative timeouts?
+- Should concurrent calls to SetTimeout() be thread-safe?
+*/
+
+// TestHTTPClientManager_SetTimeout tests timeout calculation and application
+// Tests the 0.85 multiplier formula: responseHeaderTimeout = baseTimeout * 0.85
 func TestHTTPClientManager_SetTimeout(t *testing.T) {
 	cm := &httpClientManager{
 		tlsConfig: &tls.Config{},
@@ -82,6 +113,7 @@ func TestHTTPClientManager_SetTimeout(t *testing.T) {
 	}
 }
 
+// TestHTTPClientManager_SetTimeout_NoOpSameValue tests no-op behavior for duplicate timeout sets
 func TestHTTPClientManager_SetTimeout_NoOpSameValue(t *testing.T) {
 	cm := &httpClientManager{
 		tlsConfig:      &tls.Config{},
@@ -98,6 +130,7 @@ func TestHTTPClientManager_SetTimeout_NoOpSameValue(t *testing.T) {
 	}
 }
 
+// TestHTTPClientManager_ResponseHeaderTimeoutCalculation tests mathematical precision of timeout calculations
 func TestHTTPClientManager_ResponseHeaderTimeoutCalculation(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -186,6 +219,7 @@ func (m *mockCertificateProvider) GetCertificate(*tls.ClientHelloInfo) (*tls.Cer
 // Ensure mockCertificateProvider implements the interface
 var _ apitls.CertificateProvider = (*mockCertificateProvider)(nil)
 
+// TestHTTPClientManager_TimeoutPrecision tests edge cases around floating point precision
 func TestHTTPClientManager_TimeoutPrecision(t *testing.T) {
 	// Test edge cases around floating point precision
 	tests := []struct {

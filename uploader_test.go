@@ -2,6 +2,36 @@ package main
 
 import "testing"
 
+/*
+File Validation Tests (uploader_test.go)
+
+WHAT IS BEING TESTED:
+- Basic validation: Files must end with ".avro" and have content before extension
+- Path handling: Files with paths (e.g., "path/to/data.avro") are accepted
+- Case sensitivity: Only lowercase ".avro" is accepted
+- Extension isolation: ".avro" in middle or start of filename doesn't count
+- Special characters: Hyphens, underscores, numbers in filenames are allowed
+- Edge cases: Empty strings, very long filenames, multiple dots
+- Whitespace handling: Filenames with leading/trailing whitespace are rejected
+
+WHAT IS NOT BEING TESTED:
+- File existence on disk
+- File readability/permissions
+- File content validation
+- Unicode filename support
+- Network path handling (UNC paths, etc.)
+- Path traversal protection
+
+NOTES:
+- ".avro" alone is NOT a valid filename - requires at least one character before extension
+
+QUESTIONS:
+- Should Unicode characters in filenames be supported? (e.g., "データ.avro")
+- What about case-insensitive filesystems? Should "DATA.AVRO" be accepted on Windows?
+- Should there be any path traversal validation (e.g., reject "../../../etc/passwd.avro")?
+*/
+
+// TestIsAvroFileName tests core filename validation logic
 func TestIsAvroFileName(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -15,7 +45,7 @@ func TestIsAvroFileName(t *testing.T) {
 		{"invalid extension txt", "data.txt", false},
 		{"invalid extension gz", "data.avro.gz", false},
 		{"empty string", "", false},
-		{"only extension", ".avro", true},
+		{"only extension", ".avro", false},
 		{"avro in middle", "data.avro.tmp", false},
 		{"avro at start", "avro.data", false},
 		{"no extension", "data", false},
@@ -39,6 +69,7 @@ func TestIsAvroFileName(t *testing.T) {
 	}
 }
 
+// TestIsAvroFileName_EdgeCases tests boundary conditions and unusual inputs
 func TestIsAvroFileName_EdgeCases(t *testing.T) {
 	// Test with very long strings
 	longString := make([]byte, 1000)
@@ -52,8 +83,8 @@ func TestIsAvroFileName_EdgeCases(t *testing.T) {
 	}
 
 	// Test with just .avro
-	if !isAvroFileName(".avro") {
-		t.Error("Should accept just .avro")
+	if isAvroFileName(".avro") {
+		t.Error("Should not accept just .avro")
 	}
 
 	// Test with multiple .avro occurrences
