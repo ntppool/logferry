@@ -21,7 +21,7 @@ steps:
         memory: 100MiB
 
   - name: test
-    image: golang:1.23
+    image: golang:1.24
     pull: always
     volumes:
       - name: go
@@ -40,7 +40,7 @@ steps:
         memory: 2GiB
 
   - name: goreleaser
-    image: golang:1.23
+    image: golang:1.24
     pull: always
     resources:
       requests:
@@ -103,7 +103,7 @@ steps:
     depends_on: [goreleaser]
 
   - name: fury-publish
-    image: golang:1.23
+    image: golang:1.24
     resources:
       requests:
         cpu: 250
@@ -142,7 +142,7 @@ name: publish-production
 
 steps:
   - name: download
-    image: fedora:38 # curl version 7.83 or later
+    image: fedora:42 # curl version 7.83 or later
     commands:
       - ./scripts/download-release logferry test/${DRONE_BUILD_PARENT} dist/
     resources:
@@ -176,7 +176,7 @@ steps:
     depends_on: ["download"]
 
   - name: fury-publish
-    image: golang:1.23
+    image: golang:1.24
     resources:
       requests:
         cpu: 250
@@ -198,6 +198,6 @@ trigger:
     - publish
 ---
 kind: signature
-hmac: 66b2b5f702ca249c5b62225e8ca78e9ba6da67b25a20a96e509c0836fec21ed8
+hmac: 86c70e3f555747144ff9f47fe7f24eb90bf65d3054e6fdf5333c6da167f30c10
 
 ...
