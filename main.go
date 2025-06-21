@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"net/url"
@@ -33,12 +32,7 @@ func main() {
 
 	err := run(ctx)
 	if err != nil {
-		lerr := &logger.Error{}
-		if errors.As(err, &lerr) {
-			log.Error(lerr.Msg, lerr.Data...)
-		} else {
-			log.Error("runtime error", "err", err)
-		}
+		log.Error("runtime error", "err", err)
 	}
 
 	cancel()
@@ -75,7 +69,7 @@ func run(ctx context.Context) error {
 
 	cm, err := apitls.GetCertman(*certFile, *keyFile)
 	if err != nil {
-		return logger.NewError("certman setup", "err", err)
+		return fmt.Errorf("certman setup: %w", err)
 	}
 
 	capool, err := apitls.CAPool()
@@ -126,7 +120,7 @@ func run(ctx context.Context) error {
 
 		clientManager, err := NewHTTPClientManager(cm, upstreamURL.String())
 		if err != nil {
-			return logger.NewError("http setup", "err", err)
+			return fmt.Errorf("http setup: %w", err)
 		}
 		return uploader(ctx, clientManager, *path, metricssrv.Registry())
 	})
