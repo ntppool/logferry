@@ -142,7 +142,7 @@ name: publish-production
 
 steps:
   - name: download
-    image: fedora:42 # curl version 7.83 or later
+    image: registry.fedoraproject.org/fedora:42 # curl version 7.83 or later
     commands:
       - ./scripts/download-release logferry test/${DRONE_BUILD_PARENT} dist/
     resources:
@@ -198,6 +198,6 @@ trigger:
     - publish
 ---
 kind: signature
-hmac: 86c70e3f555747144ff9f47fe7f24eb90bf65d3054e6fdf5333c6da167f30c10
+hmac: 6c2a21701d21a76a0c04033060980b01d844d0f7f77df68a957d6919f373ab4a
 
 ...
