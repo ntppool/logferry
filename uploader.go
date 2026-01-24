@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
@@ -33,7 +34,6 @@ const workerCount = 2
 type uploadSet struct {
 	client              *httpClientManager
 	fl                  *fileLock
-	apiURL              string
 	uploadTimeHistogram prometheus.Histogram
 }
 
@@ -133,7 +133,6 @@ func uploader(ctx context.Context, clientManager *httpClientManager, logpath str
 	up := uploadSet{
 		client:              clientManager,
 		fl:                  NewFileLock(),
-		apiURL:              clientManager.APIBase(),
 		uploadTimeHistogram: uploadTimeHistogram,
 	}
 
@@ -271,9 +270,23 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 		return err
 	}
 
+	// Get target URL from SRV pool (handles priority, weight, and health)
+	targetURL := up.client.GetTargetURL()
+	targetAddr := GetTargetAddress(targetURL)
+	uploadURL, err := url.JoinPath(targetURL, "api/v1/geodns/avro")
+	if err != nil {
+		span.RecordError(err)
+		return err
+	}
+
+	span.SetAttributes(attribute.String("target", targetAddr))
+
+	// Record that we're making a request to this target
+	up.client.TargetPool().RecordRequest(targetAddr)
+
 	req, err := http.NewRequestWithContext(
 		reqCtx, "POST",
-		up.apiURL+"api/v1/geodns/avro",
+		uploadURL,
 		fh,
 	)
 	if err != nil {
@@ -290,6 +303,8 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 
 	resp, err := cl.Do(req)
 	if err != nil {
+		// Mark target as unhealthy on connection error
+		up.client.TargetPool().MarkUnhealthy(targetAddr, err)
 		cl.CloseIdleConnections()
 		span.RecordError(err)
 		return err
@@ -306,9 +321,19 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 		resp.Body.Close()
 	}
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		// Mark target as healthy on successful response
+		up.client.TargetPool().MarkHealthy(targetAddr)
 		duration := timer.ObserveDuration()
 		log.Info("uploaded", "code", resp.StatusCode, "duration", duration)
+	} else if resp.StatusCode >= 500 {
+		// Mark target as unhealthy on 5xx errors
+		err := fmt.Errorf("upload error %d (%s)", resp.StatusCode, resp.Status)
+		up.client.TargetPool().MarkUnhealthy(targetAddr, err)
+		log.Warn("upload error", "code", resp.StatusCode, "status", resp.Status)
+		span.RecordError(err)
+		return err
 	} else {
+		// 4xx errors are client errors, don't affect target health
 		log.Warn("upload error", "code", resp.StatusCode, "status", resp.Status)
 		err := fmt.Errorf("upload error %d (%s)", resp.StatusCode, resp.Status)
 		span.RecordError(err)

@@ -7,7 +7,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptrace"
+	"net/url"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 
 	"go.ntppool.org/common/apitls"
 	"go.ntppool.org/common/logger"
@@ -16,15 +19,25 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
+// Default TTL for SRV refresh when no TTL is available from DNS.
+const defaultSRVTTL = 5 * time.Minute
+
 type httpClientManager struct {
 	client *http.Client
 
 	currentTimeout time.Duration
 	tlsConfig      *tls.Config
 	apiURL         string
+
+	// SRV target management
+	targetPool *TargetPool
+	srvTTL     time.Duration
+	stopCh     chan struct{}
 }
 
-func NewHTTPClientManager(certProvider apitls.CertificateProvider, apiURL string) (*httpClientManager, error) {
+func NewHTTPClientManager(certProvider apitls.CertificateProvider, apiURL string, metrics prometheus.Registerer) (*httpClientManager, error) {
+	log := logger.Setup()
+
 	capool, err := apitls.CAPool()
 	if err != nil {
 		return nil, err
@@ -38,9 +51,22 @@ func NewHTTPClientManager(certProvider apitls.CertificateProvider, apiURL string
 		// MaxVersion:           tls.VersionTLS13,
 	}
 
+	// Parse the upstream URL
+	upstreamURL, err := url.Parse(apiURL)
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize SRV metrics and target pool
+	srvMetrics := NewSRVMetrics(metrics)
+	targetPool := NewTargetPool(upstreamURL, srvMetrics)
+
 	cm := &httpClientManager{
-		tlsConfig: tlsConfig,
-		apiURL:    apiURL,
+		tlsConfig:  tlsConfig,
+		apiURL:     apiURL,
+		targetPool: targetPool,
+		srvTTL:     defaultSRVTTL,
+		stopCh:     make(chan struct{}),
 	}
 
 	cm.client = &http.Client{}
@@ -48,15 +74,52 @@ func NewHTTPClientManager(certProvider apitls.CertificateProvider, apiURL string
 	// set transport and timeouts
 	cm.SetTimeout(60 * time.Second)
 
-	go func() {
-		for {
-			// get timeouts from server
-			cm.getConfig(context.Background())
-			time.Sleep(1 * time.Hour)
-		}
-	}()
+	// Initial SRV resolution
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	if targetPool.ResolveSRV(ctx) {
+		log.Info("SRV resolution succeeded", "targets", targetPool.TargetCount())
+	} else {
+		log.Info("SRV resolution failed, using direct upstream")
+	}
+	cancel()
+
+	// Start background goroutines
+	go cm.runConfigLoop()
+	go cm.runSRVRefresh()
 
 	return cm, nil
+}
+
+// runConfigLoop periodically fetches config from the server.
+func (cm *httpClientManager) runConfigLoop() {
+	for {
+		cm.getConfig(context.Background())
+
+		select {
+		case <-cm.stopCh:
+			return
+		case <-time.After(1 * time.Hour):
+		}
+	}
+}
+
+// runSRVRefresh periodically re-resolves SRV records based on TTL.
+func (cm *httpClientManager) runSRVRefresh() {
+	log := logger.Setup()
+
+	for {
+		select {
+		case <-cm.stopCh:
+			return
+		case <-time.After(cm.srvTTL):
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if cm.targetPool.ResolveSRV(ctx) {
+			log.Debug("SRV refresh succeeded", "targets", cm.targetPool.TargetCount())
+		}
+		cancel()
+	}
 }
 
 func (cm *httpClientManager) SetTimeout(baseTimeout time.Duration) {
@@ -97,8 +160,25 @@ func (cm *httpClientManager) Client() *http.Client {
 	return cm.client
 }
 
+// APIBase returns the original upstream URL (for fallback/config purposes).
 func (cm *httpClientManager) APIBase() string {
 	return cm.apiURL
+}
+
+// GetTargetURL returns the URL for the current target to use for requests.
+// This implements SRV-based target selection with health tracking.
+func (cm *httpClientManager) GetTargetURL() string {
+	return cm.targetPool.SelectTarget()
+}
+
+// TargetPool returns the SRV target pool for health tracking.
+func (cm *httpClientManager) TargetPool() *TargetPool {
+	return cm.targetPool
+}
+
+// Stop shuts down background goroutines.
+func (cm *httpClientManager) Stop() {
+	close(cm.stopCh)
 }
 
 func (cm *httpClientManager) getConfig(ctx context.Context) error {

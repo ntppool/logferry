@@ -118,10 +118,12 @@ func run(ctx context.Context) error {
 		upstreamURL.Path = "/"
 		log.Info("upstream", "url", upstreamURL.String())
 
-		clientManager, err := NewHTTPClientManager(cm, upstreamURL.String())
+		clientManager, err := NewHTTPClientManager(cm, upstreamURL.String(), metricssrv.Registry())
 		if err != nil {
 			return fmt.Errorf("http setup: %w", err)
 		}
+		defer clientManager.Stop()
+
 		return uploader(ctx, clientManager, *path, metricssrv.Registry())
 	})
 
