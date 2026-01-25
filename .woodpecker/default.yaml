@@ -1,0 +1,116 @@
+when:
+  - event: [push, tag, pull_request]
+
+variables:
+  - &go_env
+    GOMODCACHE: /go/pkg/mod
+    GOCACHE: /go/pkg/cache
+
+clone:
+  git:
+    image: woodpeckerci/plugin-git
+    settings:
+      tags: true
+
+steps:
+  - name: test
+    image: golang:1.25
+    pull: true
+    environment: *go_env
+    commands:
+      - go test -v ./...
+      - go build ./...
+    backend_options:
+      kubernetes:
+        resources:
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+          requests:
+            cpu: 1000m
+            memory: 128Mi
+
+  - name: goreleaser
+    image: golang:1.25
+    pull: true
+    depends_on: [test]
+    environment: *go_env
+    commands:
+      - ./scripts/run-goreleaser
+    backend_options:
+      kubernetes:
+        resources:
+          limits:
+            cpu: 10000m
+            memory: 4096Mi
+          requests:
+            cpu: 6000m
+            memory: 1024Mi
+
+  - name: docker
+    image: woodpeckerci/plugin-kaniko
+    pull: true
+    depends_on: [goreleaser]
+    settings:
+      registry: harbor.ntppool.org
+      repo: ntppool/logferry
+      tags:
+        - ${CI_COMMIT_BRANCH}
+        - build-${CI_PIPELINE_NUMBER}
+        - ${CI_COMMIT_SHA:0:7}
+      auto_tag: true
+      cache: true
+      username:
+        from_secret: harbor_username
+      password:
+        from_secret: harbor_password
+
+  - name: upload
+    image: woodpeckerci/plugin-s3
+    depends_on: [goreleaser]
+    when:
+      - event: push
+        branch: main
+      - event: tag
+    settings:
+      access_key:
+        from_secret: s3_access_key
+      secret_key:
+        from_secret: s3_secret_key
+      bucket: ntp-releases
+      target: /logferry/builds/test/${CI_PIPELINE_NUMBER}
+      source: dist/*
+      strip_prefix: dist/
+      endpoint: https://c3.hkga.ntp.dev/
+      path_style: true
+    backend_options:
+      kubernetes:
+        resources:
+          limits:
+            cpu: 250m
+            memory: 256Mi
+          requests:
+            cpu: 250m
+            memory: 64Mi
+
+  - name: fury-publish
+    image: golang:1.25
+    depends_on: [goreleaser]
+    when:
+      - event: push
+        branch: main
+      - event: tag
+    environment:
+      FURY_TOKEN:
+        from_secret: fury_test_token
+    commands:
+      - ./scripts/fury-publish ntppool-test
+    backend_options:
+      kubernetes:
+        resources:
+          limits:
+            cpu: 250m
+            memory: 256Mi
+          requests:
+            cpu: 250m
+            memory: 64Mi
