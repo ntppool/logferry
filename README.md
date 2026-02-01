@@ -22,9 +22,9 @@ The system is designed for the [NTP Pool project](https://www.ntppool.org) and i
 ### logferry-api (Server)
 - HTTP API server that receives log uploads from clients
 - Forwards received data to Kafka topic `geodns-avro`
-- Runs in Kubernetes with TLS termination
+- Runs in Kubernetes (requires TLS passthrough, not termination)
 - Provides health checks and Prometheus metrics via Echo framework
-- Uses mutual TLS for client authentication
+- Uses mutual TLS (mTLS) for client authentication
 
 ## Performance
 
@@ -96,15 +96,93 @@ The API server is configured via environment variables:
 
 Logs are published to the Kafka topic `geodns-avro` (currently not configurable).
 
-## TLS Certificate Management
+## Authentication
 
-Both components require TLS certificates for secure communication:
+Logferry uses mutual TLS (mTLS) for authentication. Both the client and server present certificates during the TLS handshake, and the server extracts the client's identity from its certificate.
 
-- **Client certificates**: Used for mutual TLS authentication with the API server
-- **Server certificates**: Used by the API server for HTTPS
-- **Kafka certificates**: Used by the API server to connect to Kafka
+### How It Works
+
+1. **Client** presents its certificate during TLS handshake
+2. **Server** verifies the certificate chain against its CA pool
+3. **Server** extracts the DNS name from the client certificate
+4. **Server** validates the DNS name ends with `.mon.ntppool.dev` or `.ntppool.net`
+5. **Server** uses this hostname as the client identity for logging and Kafka records
+
+If certificate validation fails or no valid hostname is found, the server returns HTTP 401 Unauthorized.
+
+### TLS Requirements
+
+| Component | Minimum TLS Version |
+|-----------|---------------------|
+| Client    | TLS 1.3             |
+| Server    | TLS 1.2             |
+
+### Certificate Requirements
+
+- **Client certificates**: Must have a DNS name (SAN) ending in `.mon.ntppool.dev` or `.ntppool.net`
+- **Server certificates**: Standard TLS server certificate
+- **Kafka certificates**: Separate certificates for Kafka broker authentication
 
 Certificate management is handled externally (e.g., using HashiCorp Vault, cert-manager, or manual certificate deployment).
+
+### Kubernetes Ingress Compatibility
+
+**Important**: The API server is NOT compatible with ingress controllers that terminate TLS.
+
+The server requires direct access to the client's TLS certificate to:
+- Verify the certificate chain
+- Extract the DNS hostname for client identity
+- Pass the hostname to Kafka records
+
+If an ingress terminates TLS, the client certificate information is lost and authentication will fail.
+
+#### Supported Deployment Options
+
+1. **TLS Passthrough** (recommended for ingress)
+
+   Configure your ingress for SSL passthrough so encrypted traffic routes directly to the pod:
+
+   ```yaml
+   # NGINX Ingress example
+   apiVersion: networking.k8s.io/v1
+   kind: Ingress
+   metadata:
+     name: logferry-api
+     annotations:
+       nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+       nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+   spec:
+     rules:
+     - host: logferry-api.example.com
+       http:
+         paths:
+         - path: /
+           pathType: Prefix
+           backend:
+             service:
+               name: logferry-api
+               port:
+                 number: 8080
+   ```
+
+2. **LoadBalancer Service** (bypasses ingress)
+
+   Expose the service directly via a cloud load balancer with TCP passthrough:
+
+   ```yaml
+   apiVersion: v1
+   kind: Service
+   metadata:
+     name: logferry-api
+   spec:
+     type: LoadBalancer
+     ports:
+     - port: 443
+       targetPort: 8080
+       protocol: TCP
+     selector:
+       app: logferry-api
+   ```
 
 ## Monitoring
 

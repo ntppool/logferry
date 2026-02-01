@@ -47,18 +47,24 @@ steps:
             cpu: 6000m
             memory: 1024Mi
 
+  - name: generate-tags
+    image: ghcr.io/abh/woodpecker-docker-tags-plugin:sha-8a3bd7c
+    depends_on: [goreleaser]
+    settings:
+      tags: |
+        branch
+        sha
+        raw -v build-${CI_PIPELINE_NUMBER}
+        semver --auto
+
   - name: docker
     image: woodpeckerci/plugin-kaniko
     pull: true
-    depends_on: [goreleaser]
+    depends_on: [generate-tags]
     settings:
       registry: harbor.ntppool.org
       repo: ntppool/logferry
-      tags:
-        - ${CI_COMMIT_BRANCH}
-        - build-${CI_PIPELINE_NUMBER}
-        - ${CI_COMMIT_SHA:0:7}
-      auto_tag: true
+      tags_file: .tags
       cache: true
       username:
         from_secret: harbor_username
