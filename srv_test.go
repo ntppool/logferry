@@ -418,6 +418,103 @@ func TestStaleHealthStateCleanup(t *testing.T) {
 	}
 }
 
+// TestUpdateTargetsChangeDetection tests that updateTargets correctly detects changes.
+func TestUpdateTargetsChangeDetection(t *testing.T) {
+	upstreamURL, _ := url.Parse("https://logferry-api.example.com/")
+
+	t.Run("identical targets report no change", func(t *testing.T) {
+		tp := NewTargetPool(upstreamURL, nil)
+		targets := []*net.SRV{
+			{Target: "server1.example.com.", Port: 443, Priority: 10, Weight: 60},
+			{Target: "server2.example.com.", Port: 443, Priority: 10, Weight: 40},
+		}
+		tp.resolver = mockResolver(targets, nil)
+
+		tp.ResolveSRV(context.Background())
+
+		// Second call with same targets should not report a change
+		srvTargets := []SRVTarget{
+			{Host: "server1.example.com", Port: 443, Priority: 10, Weight: 60},
+			{Host: "server2.example.com", Port: 443, Priority: 10, Weight: 40},
+		}
+		changed := tp.updateTargets(srvTargets)
+		if changed {
+			t.Error("updateTargets should return false for identical targets")
+		}
+	})
+
+	t.Run("weight change detected", func(t *testing.T) {
+		tp := NewTargetPool(upstreamURL, nil)
+		tp.resolver = mockResolver([]*net.SRV{
+			{Target: "server1.example.com.", Port: 443, Priority: 10, Weight: 60},
+			{Target: "server2.example.com.", Port: 443, Priority: 10, Weight: 40},
+		}, nil)
+		tp.ResolveSRV(context.Background())
+
+		// Change weight on server1
+		srvTargets := []SRVTarget{
+			{Host: "server1.example.com", Port: 443, Priority: 10, Weight: 80},
+			{Host: "server2.example.com", Port: 443, Priority: 10, Weight: 20},
+		}
+		changed := tp.updateTargets(srvTargets)
+		if !changed {
+			t.Error("updateTargets should return true when weights change")
+		}
+	})
+
+	t.Run("added target detected", func(t *testing.T) {
+		tp := NewTargetPool(upstreamURL, nil)
+		tp.resolver = mockResolver([]*net.SRV{
+			{Target: "server1.example.com.", Port: 443, Priority: 10, Weight: 100},
+		}, nil)
+		tp.ResolveSRV(context.Background())
+
+		srvTargets := []SRVTarget{
+			{Host: "server1.example.com", Port: 443, Priority: 10, Weight: 60},
+			{Host: "server2.example.com", Port: 443, Priority: 10, Weight: 40},
+		}
+		changed := tp.updateTargets(srvTargets)
+		if !changed {
+			t.Error("updateTargets should return true when a target is added")
+		}
+	})
+
+	t.Run("removed target detected", func(t *testing.T) {
+		tp := NewTargetPool(upstreamURL, nil)
+		tp.resolver = mockResolver([]*net.SRV{
+			{Target: "server1.example.com.", Port: 443, Priority: 10, Weight: 60},
+			{Target: "server2.example.com.", Port: 443, Priority: 10, Weight: 40},
+		}, nil)
+		tp.ResolveSRV(context.Background())
+
+		srvTargets := []SRVTarget{
+			{Host: "server1.example.com", Port: 443, Priority: 10, Weight: 100},
+		}
+		changed := tp.updateTargets(srvTargets)
+		if !changed {
+			t.Error("updateTargets should return true when a target is removed")
+		}
+	})
+
+	t.Run("priority change detected", func(t *testing.T) {
+		tp := NewTargetPool(upstreamURL, nil)
+		tp.resolver = mockResolver([]*net.SRV{
+			{Target: "server1.example.com.", Port: 443, Priority: 10, Weight: 50},
+			{Target: "server2.example.com.", Port: 443, Priority: 10, Weight: 50},
+		}, nil)
+		tp.ResolveSRV(context.Background())
+
+		srvTargets := []SRVTarget{
+			{Host: "server1.example.com", Port: 443, Priority: 10, Weight: 50},
+			{Host: "server2.example.com", Port: 443, Priority: 20, Weight: 50},
+		}
+		changed := tp.updateTargets(srvTargets)
+		if !changed {
+			t.Error("updateTargets should return true when priority changes")
+		}
+	})
+}
+
 // TestNeedsRefresh tests TTL-based refresh checking.
 func TestNeedsRefresh(t *testing.T) {
 	upstreamURL, _ := url.Parse("https://logferry-api.example.com/")

@@ -199,8 +199,10 @@ func (tp *TargetPool) ResolveSRV(ctx context.Context) bool {
 		})
 	}
 
-	tp.updateTargets(targets)
-	log.Info("SRV lookup succeeded", "domain", tp.srvDomain, "targets", len(targets))
+	changed := tp.updateTargets(targets)
+	if changed {
+		log.Info("SRV lookup succeeded", "domain", tp.srvDomain, "targets", len(targets))
+	}
 	return true
 }
 
@@ -209,19 +211,20 @@ func (tp *TargetPool) ResolveSRV(ctx context.Context) bool {
 const staleHealthCleanupCycles = 3
 
 // updateTargets updates the target list while preserving health state.
-func (tp *TargetPool) updateTargets(targets []SRVTarget) {
+// Returns true if the target set changed (additions, removals, or weight/priority changes).
+func (tp *TargetPool) updateTargets(targets []SRVTarget) bool {
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
 
-	oldTargets := make(map[string]bool)
+	oldTargets := make(map[string]SRVTarget)
 	for _, t := range tp.targets {
-		oldTargets[t.Address()] = true
+		oldTargets[t.Address()] = t
 	}
 
-	newTargets := make(map[string]bool)
+	newTargets := make(map[string]SRVTarget)
 	for _, t := range targets {
 		addr := t.Address()
-		newTargets[addr] = true
+		newTargets[addr] = t
 		// Reset staleness counter for active targets
 		tp.activeTargets[addr] = 0
 		// Initialize health state for new targets
@@ -233,26 +236,43 @@ func (tp *TargetPool) updateTargets(targets []SRVTarget) {
 		}
 	}
 
-	// Log target changes and track staleness
-	log := logger.Setup()
-	for addr := range newTargets {
-		if !oldTargets[addr] {
-			log.Info("SRV target added", "target", addr)
+	// Detect changes: added, removed, or weight/priority changed
+	changed := len(oldTargets) != len(newTargets)
+	if !changed {
+		for addr, newT := range newTargets {
+			oldT, exists := oldTargets[addr]
+			if !exists || oldT.Weight != newT.Weight || oldT.Priority != newT.Priority {
+				changed = true
+				break
+			}
 		}
 	}
-	for addr := range oldTargets {
-		if !newTargets[addr] {
-			log.Info("SRV target removed", "target", addr)
+
+	if changed {
+		// Calculate weight percentages per priority group
+		weightPcts := tp.calcWeightPcts(targets)
+
+		log := logger.Setup()
+		for addr := range newTargets {
+			if _, exists := oldTargets[addr]; !exists {
+				log.Info("SRV target added", "target", addr, "weight_pct", weightPcts[addr])
+			}
+		}
+		for addr := range oldTargets {
+			if _, exists := newTargets[addr]; !exists {
+				log.Info("SRV target removed", "target", addr)
+			}
 		}
 	}
 
 	// Increment staleness counter for targets not in current set and clean up stale ones
 	for addr := range tp.activeTargets {
-		if !newTargets[addr] {
+		if _, exists := newTargets[addr]; !exists {
 			tp.activeTargets[addr]++
 			if tp.activeTargets[addr] >= staleHealthCleanupCycles {
 				delete(tp.healthState, addr)
 				delete(tp.activeTargets, addr)
+				log := logger.Setup()
 				log.Debug("cleaned up stale target health state", "target", addr)
 			}
 		}
@@ -266,6 +286,41 @@ func (tp *TargetPool) updateTargets(targets []SRVTarget) {
 		tp.metrics.fallbackActive.Set(0)
 		tp.metrics.targetsTotal.Set(float64(len(targets)))
 	}
+
+	return changed
+}
+
+// calcWeightPcts calculates the weight percentage for each target within its priority group.
+// Weight 0 is treated as 1 per RFC 2782.
+func (tp *TargetPool) calcWeightPcts(targets []SRVTarget) map[string]int {
+	// Group by priority and sum effective weights
+	type groupInfo struct {
+		totalWeight uint32
+	}
+	groups := make(map[uint16]*groupInfo)
+	for _, t := range targets {
+		g, exists := groups[t.Priority]
+		if !exists {
+			g = &groupInfo{}
+			groups[t.Priority] = g
+		}
+		w := t.Weight
+		if w == 0 {
+			w = 1
+		}
+		g.totalWeight += uint32(w)
+	}
+
+	pcts := make(map[string]int, len(targets))
+	for _, t := range targets {
+		w := t.Weight
+		if w == 0 {
+			w = 1
+		}
+		total := groups[t.Priority].totalWeight
+		pcts[t.Address()] = int(uint32(w) * 100 / total)
+	}
+	return pcts
 }
 
 // setFallbackMode switches to/from fallback mode.
