@@ -19,8 +19,8 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-// Default TTL for SRV refresh when no TTL is available from DNS.
-const defaultSRVTTL = 5 * time.Minute
+// Default interval for SRV record refresh.
+const defaultSRVTTL = 120 * time.Second
 
 type httpClientManager struct {
 	client *http.Client

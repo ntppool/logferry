@@ -280,6 +280,7 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 	}
 
 	span.SetAttributes(attribute.String("target", targetAddr))
+	log = log.With("server", targetAddr)
 
 	// Record that we're making a request to this target
 	up.client.TargetPool().RecordRequest(targetAddr)
