@@ -49,7 +49,7 @@ steps:
 
   - name: generate-tags
     image: ghcr.io/abh/woodpecker-docker-tags-plugin:sha-8a3bd7c
-    depends_on: [goreleaser]
+    depends_on: [test]
     settings:
       tags: |
         branch
@@ -60,7 +60,7 @@ steps:
   - name: docker
     image: woodpeckerci/plugin-kaniko
     pull: true
-    depends_on: [generate-tags]
+    depends_on: [goreleaser, generate-tags]
     settings:
       registry: harbor.ntppool.org
       repo: ntppool/logferry
