@@ -5,6 +5,8 @@ variables:
   - &go_env
     GOMODCACHE: /go/pkg/mod
     GOCACHE: /go/pkg/cache
+  - &go_volumes
+    - go-pkg:/go/pkg
 
 clone:
   git:
@@ -17,6 +19,7 @@ steps:
     image: golang:1.25
     pull: true
     environment: *go_env
+    volumes: *go_volumes
     commands:
       - go test -v ./...
       - go build ./...
@@ -35,6 +38,7 @@ steps:
     pull: true
     depends_on: [test]
     environment: *go_env
+    volumes: *go_volumes
     commands:
       - ./scripts/run-goreleaser
     backend_options:
@@ -107,8 +111,10 @@ steps:
         branch: main
       - event: tag
     environment:
+      <<: *go_env
       FURY_TOKEN:
         from_secret: fury_test_token
+    volumes: *go_volumes
     commands:
       - ./scripts/fury-publish ntppool-test
     backend_options:
