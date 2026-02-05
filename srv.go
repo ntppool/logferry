@@ -202,6 +202,8 @@ func (tp *TargetPool) ResolveSRV(ctx context.Context) bool {
 	changed := tp.updateTargets(targets)
 	if changed {
 		log.Info("SRV lookup succeeded", "domain", tp.srvDomain, "targets", len(targets))
+	} else {
+		log.Debug("SRV lookup unchanged", "domain", tp.srvDomain, "targets", len(targets))
 	}
 	return true
 }
@@ -253,9 +255,9 @@ func (tp *TargetPool) updateTargets(targets []SRVTarget) bool {
 		weightPcts := tp.calcWeightPcts(targets)
 
 		log := logger.Setup()
-		for addr := range newTargets {
+		for addr, target := range newTargets {
 			if _, exists := oldTargets[addr]; !exists {
-				log.Info("SRV target added", "target", addr, "weight_pct", weightPcts[addr])
+				log.Info("SRV target added", "target", addr, "priority", target.Priority, "weight_pct", weightPcts[addr])
 			}
 		}
 		for addr := range oldTargets {

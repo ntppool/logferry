@@ -76,9 +76,7 @@ func NewHTTPClientManager(certProvider apitls.CertificateProvider, apiURL string
 
 	// Initial SRV resolution
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	if targetPool.ResolveSRV(ctx) {
-		log.Info("SRV resolution succeeded", "targets", targetPool.TargetCount())
-	} else {
+	if !targetPool.ResolveSRV(ctx) {
 		log.Info("SRV resolution failed, using direct upstream")
 	}
 	cancel()
@@ -115,8 +113,8 @@ func (cm *httpClientManager) runSRVRefresh() {
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		if cm.targetPool.ResolveSRV(ctx) {
-			log.Debug("SRV refresh succeeded", "targets", cm.targetPool.TargetCount())
+		if !cm.targetPool.ResolveSRV(ctx) {
+			log.Warn("SRV refresh failed or timed out")
 		}
 		cancel()
 	}
