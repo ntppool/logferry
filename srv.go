@@ -580,5 +580,14 @@ func GetTargetAddress(targetURL string) string {
 	if err != nil {
 		return ""
 	}
-	return u.Host
+	host := u.Host
+	if host != "" && !strings.Contains(host, ":") {
+		switch u.Scheme {
+		case "https":
+			host += ":443"
+		case "http":
+			host += ":80"
+		}
+	}
+	return host
 }

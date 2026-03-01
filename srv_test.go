@@ -296,7 +296,8 @@ func TestGetTargetAddress(t *testing.T) {
 	}{
 		{"https://server1.example.com:443/", "server1.example.com:443"},
 		{"https://server2.example.com:8443/api/v1", "server2.example.com:8443"},
-		{"https://example.com/", "example.com"},
+		{"https://example.com/", "example.com:443"},
+		{"http://example.com/path", "example.com:80"},
 		{"invalid", ""},
 	}
 
