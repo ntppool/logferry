@@ -16,7 +16,7 @@ clone:
 
 steps:
   - name: test
-    image: golang:1.25
+    image: golang:1.26
     pull: true
     environment: *go_env
     volumes: *go_volumes
@@ -34,7 +34,7 @@ steps:
             memory: 128Mi
 
   - name: goreleaser
-    image: golang:1.25
+    image: golang:1.26
     pull: true
     depends_on: [test]
     environment: *go_env
@@ -104,7 +104,7 @@ steps:
             memory: 64Mi
 
   - name: fury-publish
-    image: golang:1.25
+    image: golang:1.26
     depends_on: [goreleaser]
     when:
       - event: push

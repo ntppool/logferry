@@ -189,16 +189,60 @@ If an ingress terminates TLS, the client certificate information is lost and aut
 ### Prometheus Metrics
 
 #### Client (logferry)
-- Metrics available on port 9097
-- Includes process metrics, upload timing, and file processing statistics
 
-#### API Server (logferry-api)  
-- Metrics integrated with Echo framework endpoints
-- Includes HTTP request metrics, Kafka publishing metrics, and health status
+Metrics are available on port 9097. Each client runs its own metrics endpoint, so per-host visibility comes from the Prometheus scrape target's `instance` label.
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `upload_success_total` | Counter | Files uploaded successfully |
+| `upload_failure_total` | Counter | File upload failures |
+| `upload_duration_seconds` | Histogram | Upload latency for successful requests |
+| `queue_internal_count` | Gauge | Files in the in-memory queue waiting to be processed |
+| `queue_disk_count` | Gauge | Avro files on disk waiting to be processed |
+
+**SRV discovery metrics** (when using SRV-based upstream resolution):
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `logferry_srv_target_requests_total` | Counter | `target` | Requests sent to each SRV target |
+| `logferry_srv_target_errors_total` | Counter | `target` | Errors per SRV target |
+| `logferry_srv_target_healthy` | Gauge | `target` | 1 if target is healthy, 0 if in backoff |
+| `logferry_srv_targets_total` | Gauge | | Current number of SRV targets (0 if in fallback mode) |
+| `logferry_srv_lookups_total` | Counter | | SRV DNS lookups performed |
+| `logferry_srv_fallback_active` | Gauge | | 1 if using direct `--upstream` URL (no SRV) |
+
+Standard Go process metrics (`process_*`) are also registered.
+
+#### API Server (logferry-api)
+
+Metrics are available on port 4281.
+
+**HTTP request metrics** (via Echo middleware, labels: `code`, `method`, `url`):
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `logferry_request_duration_seconds` | Histogram | Request duration per endpoint |
+| `logferry_request_size_bytes` | Histogram | Request body size |
+| `logferry_response_size_bytes` | Histogram | Response body size |
+| `logferry_requests_total` | Counter | Total requests per endpoint and status code |
+
+**Kafka writer metrics** (prefix `logferry_kafka_`):
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `logferry_kafka_messages` | Counter | Total Kafka messages written |
+| `logferry_kafka_errors` | Counter | Total Kafka write errors |
+| `logferry_kafka_batch_time` | Summary | Time spent forming batches |
+| `logferry_kafka_batch_bytes` | Summary | Batch size in bytes |
+| `logferry_kafka_batch_queue_time` | Summary | Time batches spend queued |
+| `logferry_kafka_write_time` | Summary | Time spent writing to Kafka |
+| `logferry_kafka_wait_time` | Summary | Time spent waiting for Kafka |
+
+Note: The server does not include a per-client-host label on its metrics. Client identity (extracted from mTLS certificates) is included in structured logs and OpenTelemetry traces but not in Prometheus metrics.
 
 ### Health Checks
 
-The API server provides health check endpoints for Kubernetes probes.
+The API server provides a health check endpoint on port 4280 for Kubernetes probes. It returns 200 if Kafka partitions are reachable and 502 otherwise.
 
 ## File Lifecycle
 
