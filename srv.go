@@ -346,20 +346,21 @@ func (tp *TargetPool) setFallbackMode(fallback bool) {
 	}
 }
 
-// SelectTarget returns the URL for the next target to use.
-// This implements full SRV priority/weight semantics.
-func (tp *TargetPool) SelectTarget() string {
+// SelectTarget returns the URL for the next target to use and a wait duration.
+// When a healthy target is available, wait is 0. When all targets are in backoff,
+// wait indicates how long until the soonest backoff expires (capped at maxTargetWait).
+func (tp *TargetPool) SelectTarget() (string, time.Duration) {
 	tp.mu.RLock()
 	defer tp.mu.RUnlock()
 
 	if tp.fallbackMode || len(tp.targets) == 0 {
-		return tp.upstreamURL.String()
+		return tp.upstreamURL.String(), 0
 	}
 
-	target := tp.selectWeightedTarget()
+	target, wait := tp.selectWeightedTarget()
 	if target == nil {
 		// All targets unhealthy, use fallback
-		return tp.upstreamURL.String()
+		return tp.upstreamURL.String(), 0
 	}
 
 	// Build URL with target host:port
@@ -368,12 +369,19 @@ func (tp *TargetPool) SelectTarget() string {
 		Host:   target.Address(),
 		Path:   "/",
 	}
-	return u.String()
+	return u.String(), wait
 }
 
+// maxTargetWait caps how long SelectTarget asks callers to wait when all targets
+// are in backoff. This prevents excessively long waits from high backoff levels.
+const maxTargetWait = 10 * time.Second
+
 // selectWeightedTarget implements SRV priority and weight-based selection.
+// Returns the selected target and a wait duration. When a healthy target is found,
+// wait is 0. When all targets are in backoff, returns the least-unhealthy target
+// and the remaining backoff time (capped at maxTargetWait).
 // Must be called with at least read lock held.
-func (tp *TargetPool) selectWeightedTarget() *SRVTarget {
+func (tp *TargetPool) selectWeightedTarget() (*SRVTarget, time.Duration) {
 	now := time.Now()
 
 	// Group targets by priority
@@ -394,12 +402,13 @@ func (tp *TargetPool) selectWeightedTarget() *SRVTarget {
 		group := priorityGroups[priority]
 		target := tp.selectFromGroup(group, now)
 		if target != nil {
-			return target
+			return target, 0
 		}
 	}
 
 	// All targets unhealthy - pick the one with shortest remaining backoff
-	return tp.selectLeastUnhealthy(now)
+	target, wait := tp.selectLeastUnhealthy(now)
+	return target, wait
 }
 
 // selectFromGroup selects a target from a priority group using weight distribution.
@@ -450,9 +459,11 @@ func (tp *TargetPool) selectFromGroup(group []SRVTarget, now time.Time) *SRVTarg
 }
 
 // selectLeastUnhealthy picks the target with the shortest remaining backoff time.
-func (tp *TargetPool) selectLeastUnhealthy(now time.Time) *SRVTarget {
+// Returns the target and the remaining backoff wait (capped at maxTargetWait).
+// If a target's backoff has expired, wait is 0.
+func (tp *TargetPool) selectLeastUnhealthy(now time.Time) (*SRVTarget, time.Duration) {
 	if len(tp.targets) == 0 {
-		return nil
+		return nil, 0
 	}
 
 	var best *SRVTarget
@@ -462,12 +473,12 @@ func (tp *TargetPool) selectLeastUnhealthy(now time.Time) *SRVTarget {
 		t := &tp.targets[i]
 		info := tp.healthState[t.Address()]
 		if info == nil {
-			return t // No health info means healthy
+			return t, 0 // No health info means healthy
 		}
 
 		remaining := info.backoffUntil.Sub(now)
 		if remaining <= 0 {
-			return t // Backoff expired
+			return t, 0 // Backoff expired
 		}
 
 		if remaining < bestBackoff {
@@ -476,7 +487,7 @@ func (tp *TargetPool) selectLeastUnhealthy(now time.Time) *SRVTarget {
 		}
 	}
 
-	return best
+	return best, min(bestBackoff, maxTargetWait)
 }
 
 // MarkHealthy marks a target as healthy and resets its backoff.

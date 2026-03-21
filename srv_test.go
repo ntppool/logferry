@@ -120,7 +120,7 @@ func TestTargetPoolResolveSRV(t *testing.T) {
 		tp.ResolveSRV(context.Background())
 
 		// Get the target URL and check the hostname
-		targetURL := tp.SelectTarget()
+		targetURL, _ := tp.SelectTarget()
 		if targetURL != "https://server1.example.com:443/" {
 			t.Errorf("SelectTarget() = %q, expected no trailing dot in hostname", targetURL)
 		}
@@ -134,7 +134,7 @@ func TestTargetPoolSelectTarget(t *testing.T) {
 	t.Run("fallback mode returns upstream URL", func(t *testing.T) {
 		tp := NewTargetPool(upstreamURL, nil)
 
-		targetURL := tp.SelectTarget()
+		targetURL, _ := tp.SelectTarget()
 		if targetURL != "https://logferry-api.example.com/" {
 			t.Errorf("SelectTarget() = %q, want upstream URL", targetURL)
 		}
@@ -147,7 +147,7 @@ func TestTargetPoolSelectTarget(t *testing.T) {
 		}, nil)
 		tp.ResolveSRV(context.Background())
 
-		targetURL := tp.SelectTarget()
+		targetURL, _ := tp.SelectTarget()
 		if targetURL != "https://server1.example.com:443/" {
 			t.Errorf("SelectTarget() = %q, want server1 URL", targetURL)
 		}
@@ -165,7 +165,7 @@ func TestTargetPoolSelectTarget(t *testing.T) {
 		tp.MarkUnhealthy("primary.example.com:443", errors.New("test"))
 
 		// Should now select backup
-		targetURL := tp.SelectTarget()
+		targetURL, _ := tp.SelectTarget()
 		if targetURL != "https://backup.example.com:443/" {
 			t.Errorf("SelectTarget() = %q, expected backup server", targetURL)
 		}
@@ -187,7 +187,7 @@ func TestTargetPoolHealthTracking(t *testing.T) {
 		tp.MarkHealthy("server1.example.com:443")
 
 		// Should still select the target
-		targetURL := tp.SelectTarget()
+		targetURL, _ := tp.SelectTarget()
 		if targetURL != "https://server1.example.com:443/" {
 			t.Errorf("SelectTarget() = %q, expected server1", targetURL)
 		}
@@ -279,12 +279,16 @@ func TestSelectLeastUnhealthy(t *testing.T) {
 	time.Sleep(10 * time.Millisecond) // Small delay
 	tp.MarkUnhealthy("server2.example.com:443", errors.New("test"))
 
-	// Both are unhealthy, should select one (the one with shorter remaining backoff)
-	targetURL := tp.SelectTarget()
+	// Both are unhealthy, should select one with a wait duration
+	targetURL, wait := tp.SelectTarget()
 
 	// Should return a valid target URL (not the upstream URL)
 	if targetURL == "https://logferry-api.example.com/" {
 		t.Error("Should select from unhealthy targets when all are unhealthy")
+	}
+	// Should indicate a wait is needed
+	if wait == 0 {
+		t.Error("Should return non-zero wait when all targets are unhealthy")
 	}
 }
 
@@ -326,7 +330,7 @@ func TestWeightDistribution(t *testing.T) {
 	iterations := 10000
 
 	for i := 0; i < iterations; i++ {
-		targetURL := tp.SelectTarget()
+		targetURL, _ := tp.SelectTarget()
 		counts[targetURL]++
 	}
 
@@ -359,7 +363,7 @@ func TestZeroWeightTreatedAsOne(t *testing.T) {
 	iterations := 1000
 
 	for i := 0; i < iterations; i++ {
-		targetURL := tp.SelectTarget()
+		targetURL, _ := tp.SelectTarget()
 		counts[targetURL]++
 	}
 
@@ -512,6 +516,55 @@ func TestUpdateTargetsChangeDetection(t *testing.T) {
 		changed := tp.updateTargets(srvTargets)
 		if !changed {
 			t.Error("updateTargets should return true when priority changes")
+		}
+	})
+}
+
+// TestSelectTargetWaitDuration tests that SelectTarget returns appropriate wait times.
+func TestSelectTargetWaitDuration(t *testing.T) {
+	upstreamURL, _ := url.Parse("https://logferry-api.example.com/")
+
+	t.Run("healthy target returns zero wait", func(t *testing.T) {
+		tp := NewTargetPool(upstreamURL, nil)
+		tp.resolver = mockResolver([]*net.SRV{
+			{Target: "server1.example.com", Port: 443, Priority: 10, Weight: 100},
+		}, nil)
+		tp.ResolveSRV(context.Background())
+
+		_, wait := tp.SelectTarget()
+		if wait != 0 {
+			t.Errorf("expected zero wait for healthy target, got %v", wait)
+		}
+	})
+
+	t.Run("all unhealthy returns capped wait", func(t *testing.T) {
+		tp := NewTargetPool(upstreamURL, nil)
+		tp.resolver = mockResolver([]*net.SRV{
+			{Target: "server1.example.com", Port: 443, Priority: 10, Weight: 100},
+		}, nil)
+		tp.ResolveSRV(context.Background())
+
+		// Mark unhealthy multiple times to increase backoff level
+		for i := 0; i < 7; i++ {
+			tp.MarkUnhealthy("server1.example.com:443", errors.New("test"))
+		}
+
+		_, wait := tp.SelectTarget()
+		if wait > maxTargetWait {
+			t.Errorf("wait %v exceeds maxTargetWait %v", wait, maxTargetWait)
+		}
+		if wait == 0 {
+			t.Error("expected non-zero wait when all targets are unhealthy")
+		}
+	})
+
+	t.Run("fallback mode returns zero wait", func(t *testing.T) {
+		tp := NewTargetPool(upstreamURL, nil)
+		// No SRV resolution, stays in fallback mode
+
+		_, wait := tp.SelectTarget()
+		if wait != 0 {
+			t.Errorf("expected zero wait in fallback mode, got %v", wait)
 		}
 	})
 }

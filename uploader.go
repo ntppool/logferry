@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -31,10 +32,26 @@ import (
 
 const workerCount = 2
 
+const maxUploadAttempts = 3
+
+var retryDelays = []time.Duration{
+	1 * time.Second,
+	3 * time.Second,
+	5 * time.Second,
+}
+
+type retryableError struct {
+	err error
+}
+
+func (e *retryableError) Error() string { return e.err.Error() }
+func (e *retryableError) Unwrap() error { return e.err }
+
 type uploadSet struct {
 	client              *httpClientManager
 	fl                  *fileLock
 	uploadTimeHistogram prometheus.Histogram
+	retryCounter        prometheus.Counter
 }
 
 func uploader(ctx context.Context, clientManager *httpClientManager, logpath string, metrics prometheus.Registerer) error {
@@ -130,6 +147,12 @@ func uploader(ctx context.Context, clientManager *httpClientManager, logpath str
 	})
 	metrics.MustRegister(uploadTimeHistogram)
 
+	uploadRetryCounter := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "upload_retry_total",
+		Help: "Upload retry attempts",
+	})
+	metrics.MustRegister(uploadRetryCounter)
+
 	metrics.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Name: "client_cert_expiry_timestamp_seconds",
 		Help: "Unix timestamp of client certificate NotAfter",
@@ -155,6 +178,7 @@ func uploader(ctx context.Context, clientManager *httpClientManager, logpath str
 		client:              clientManager,
 		fl:                  NewFileLock(),
 		uploadTimeHistogram: uploadTimeHistogram,
+		retryCounter:        uploadRetryCounter,
 	}
 
 	g.Go(func() error {
@@ -243,7 +267,6 @@ func uploader(ctx context.Context, clientManager *httpClientManager, logpath str
 					if err != nil {
 						log.Error("error uploading", "path", p, "err", err)
 						uploadErrorCounter.Inc()
-						up.client.Client().CloseIdleConnections()
 						continue
 					}
 					uploadOkCounter.Inc()
@@ -261,7 +284,6 @@ func isAvroFileName(name string) bool {
 
 func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, filePath string) error {
 	ctx, span := tracing.Tracer().Start(ctx, "upload", trace.WithSpanKind(trace.SpanKindClient))
-
 	defer span.End()
 
 	log = log.With("traceid", span.SpanContext().TraceID())
@@ -302,14 +324,71 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 	if err != nil {
 		return err
 	}
+	shaSum := sha.Sum(nil)
 
-	_, err = fh.Seek(0, io.SeekStart)
-	if err != nil {
-		return err
+	var lastErr error
+	for attempt := 0; attempt < maxUploadAttempts; attempt++ {
+		if attempt > 0 {
+			up.retryCounter.Inc()
+
+			delay := retryDelays[attempt-1]
+			log.Warn("retrying upload", "attempt", attempt+1, "delay", delay, "err", lastErr)
+
+			select {
+			case <-reqCtx.Done():
+				return reqCtx.Err()
+			case <-time.After(delay):
+			}
+		}
+
+		// Seek file back to start for each attempt
+		if _, err := fh.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+
+		lastErr = up.uploadAttempt(reqCtx, log, id, fh, stat, shaSum)
+		if lastErr == nil {
+			duration := timer.ObserveDuration()
+			log.Info("uploaded", "duration", duration)
+
+			if err := os.Remove(filePath); err != nil {
+				err = fmt.Errorf("error removing log: %w", err)
+				span.RecordError(err)
+				return err
+			}
+			return nil
+		}
+
+		span.RecordError(lastErr)
+
+		var re *retryableError
+		if !errors.As(lastErr, &re) {
+			return lastErr
+		}
+
+		up.client.Client().CloseIdleConnections()
+	}
+
+	return lastErr
+}
+
+func (up *uploadSet) uploadAttempt(ctx context.Context, log *slog.Logger, id string, fh *os.File, stat os.FileInfo, shaSum []byte) error {
+	ctx, span := tracing.Tracer().Start(ctx, "upload_attempt")
+	defer span.End()
+
+	// Check if all targets are in backoff and wait if needed
+	if _, wait := up.client.GetTargetURL(); wait > 0 {
+		log.Info("all targets in backoff, waiting", "wait", wait)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(wait):
+		}
 	}
 
 	// Get target URL from SRV pool (handles priority, weight, and health)
-	targetURL := up.client.GetTargetURL()
+	targetURL, _ := up.client.GetTargetURL()
+
 	targetAddr := GetTargetAddress(targetURL)
 	uploadURL, err := url.JoinPath(targetURL, "api/v1/geodns/avro")
 	if err != nil {
@@ -323,11 +402,7 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 	// Record that we're making a request to this target
 	up.client.TargetPool().RecordRequest(targetAddr)
 
-	req, err := http.NewRequestWithContext(
-		reqCtx, "POST",
-		uploadURL,
-		fh,
-	)
+	req, err := http.NewRequestWithContext(ctx, "POST", uploadURL, fh)
 	if err != nil {
 		span.RecordError(err)
 		return err
@@ -336,17 +411,16 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 	req.Header.Add("Request-ID", id)
 	req.Header.Add("User-Agent", "logferry/"+version.Version())
 	req.Header.Add("file-size", strconv.FormatInt(stat.Size(), 10))
-	req.Header.Add("content-sha256", base64.StdEncoding.EncodeToString(sha.Sum(nil)))
+	req.Header.Add("content-sha256", base64.StdEncoding.EncodeToString(shaSum))
 
 	cl := up.client.Client()
 
 	resp, err := cl.Do(req)
 	if err != nil {
-		// Mark target as unhealthy on connection error
 		up.client.TargetPool().MarkUnhealthy(targetAddr, err)
 		cl.CloseIdleConnections()
 		span.RecordError(err)
-		return err
+		return &retryableError{err}
 	}
 	if resp.Body != nil {
 		b, err := io.ReadAll(resp.Body)
@@ -360,31 +434,25 @@ func (up *uploadSet) upload(ctx context.Context, log *slog.Logger, id string, fi
 		resp.Body.Close()
 	}
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		// Mark target as healthy on successful response
 		up.client.TargetPool().MarkHealthy(targetAddr)
-		duration := timer.ObserveDuration()
-		log.Info("uploaded", "code", resp.StatusCode, "duration", duration)
+		return nil
+	} else if resp.StatusCode == http.StatusTooManyRequests {
+		err := fmt.Errorf("upload rate limited %d (%s)", resp.StatusCode, resp.Status)
+		up.client.TargetPool().MarkUnhealthy(targetAddr, err)
+		log.Warn("upload rate limited", "code", resp.StatusCode, "status", resp.Status)
+		span.RecordError(err)
+		return &retryableError{err}
 	} else if resp.StatusCode >= 500 {
-		// Mark target as unhealthy on 5xx errors
 		err := fmt.Errorf("upload error %d (%s)", resp.StatusCode, resp.Status)
 		up.client.TargetPool().MarkUnhealthy(targetAddr, err)
 		log.Warn("upload error", "code", resp.StatusCode, "status", resp.Status)
 		span.RecordError(err)
-		return err
+		return &retryableError{err}
 	} else {
-		// 4xx errors are client errors, don't affect target health
+		// Other 4xx errors are client errors, don't retry
 		log.Warn("upload error", "code", resp.StatusCode, "status", resp.Status)
 		err := fmt.Errorf("upload error %d (%s)", resp.StatusCode, resp.Status)
 		span.RecordError(err)
 		return err
 	}
-
-	err = os.Remove(filePath)
-	if err != nil {
-		err = fmt.Errorf("error removing log: %w", err)
-		span.RecordError(err)
-		return err
-	}
-
-	return nil
 }

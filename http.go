@@ -167,9 +167,10 @@ func (cm *httpClientManager) APIBase() string {
 	return cm.apiURL
 }
 
-// GetTargetURL returns the URL for the current target to use for requests.
-// This implements SRV-based target selection with health tracking.
-func (cm *httpClientManager) GetTargetURL() string {
+// GetTargetURL returns the URL for the current target to use for requests
+// and a wait duration. When all targets are in backoff, wait indicates how
+// long the caller should wait before attempting the request.
+func (cm *httpClientManager) GetTargetURL() (string, time.Duration) {
 	return cm.targetPool.SelectTarget()
 }
 
