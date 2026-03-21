@@ -19,6 +19,13 @@ Both logferry (client) and logferry-api (server) export Prometheus metrics.
 | `upload_failure_total` | counter | Failed file uploads |
 | `upload_duration_seconds` | histogram | Upload latency for successful requests (buckets: 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 5, 10 seconds) |
 
+### Certificate
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `client_cert_expiry_timestamp_seconds` | gauge | Unix timestamp of client certificate NotAfter |
+| `client_cert_expired` | gauge | 1 if client certificate is expired, 0 if valid |
+
 ### SRV target pool
 
 | Metric | Type | Labels | Description |

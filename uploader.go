@@ -130,6 +130,27 @@ func uploader(ctx context.Context, clientManager *httpClientManager, logpath str
 	})
 	metrics.MustRegister(uploadTimeHistogram)
 
+	metrics.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "client_cert_expiry_timestamp_seconds",
+		Help: "Unix timestamp of client certificate NotAfter",
+	}, func() float64 {
+		expiry, err := clientManager.CertExpiry()
+		if err != nil {
+			return 0
+		}
+		return float64(expiry.Unix())
+	}))
+
+	metrics.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Name: "client_cert_expired",
+		Help: "1 if client certificate is expired, 0 if valid",
+	}, func() float64 {
+		if clientManager.CertValid() {
+			return 0
+		}
+		return 1
+	}))
+
 	up := uploadSet{
 		client:              clientManager,
 		fl:                  NewFileLock(),
@@ -192,6 +213,23 @@ func uploader(ctx context.Context, clientManager *httpClientManager, logpath str
 				case <-ctx.Done():
 					return nil
 				case p := <-processCh:
+					// Pause uploads while certificate is expired
+					certWarned := false
+					for !up.client.CertValid() {
+						if !certWarned {
+							log.Warn("client certificate expired, pausing uploads")
+							certWarned = true
+						}
+						select {
+						case <-ctx.Done():
+							return nil
+						case <-time.After(30 * time.Second):
+						}
+					}
+					if certWarned {
+						log.Info("client certificate renewed, resuming uploads")
+					}
+
 					log.Debug("change to file", "path", p)
 
 					id, err := ulid.MakeULID(time.Now())

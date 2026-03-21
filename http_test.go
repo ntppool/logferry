@@ -1,7 +1,12 @@
 package main
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
+	"math/big"
 	"net/http"
 	"testing"
 	"time"
@@ -206,18 +211,97 @@ func TestHTTPClientManager_Client(t *testing.T) {
 }
 
 // Mock certificate provider for testing
-type mockCertificateProvider struct{}
+type mockCertificateProvider struct {
+	cert *tls.Certificate
+}
 
 func (m *mockCertificateProvider) GetClientCertificate(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+	if m.cert != nil {
+		return m.cert, nil
+	}
 	return &tls.Certificate{}, nil
 }
 
 func (m *mockCertificateProvider) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	if m.cert != nil {
+		return m.cert, nil
+	}
 	return &tls.Certificate{}, nil
 }
 
 // Ensure mockCertificateProvider implements the interface
 var _ apitls.CertificateProvider = (*mockCertificateProvider)(nil)
+
+func generateTestCert(notBefore, notAfter time.Time) *tls.Certificate {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		panic(err)
+	}
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		NotBefore:    notBefore,
+		NotAfter:     notAfter,
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		panic(err)
+	}
+	return &tls.Certificate{
+		Certificate: [][]byte{certDER},
+		PrivateKey:  key,
+	}
+}
+
+func TestHTTPClientManager_CertExpiry(t *testing.T) {
+	notAfter := time.Now().Add(24 * time.Hour).Truncate(time.Second)
+	cert := generateTestCert(time.Now().Add(-1*time.Hour), notAfter)
+
+	provider := &mockCertificateProvider{cert: cert}
+	cm := &httpClientManager{
+		certProvider: provider,
+	}
+
+	expiry, err := cm.CertExpiry()
+	if err != nil {
+		t.Fatalf("CertExpiry() returned error: %v", err)
+	}
+	if !expiry.Equal(notAfter) {
+		t.Errorf("CertExpiry() = %v, want %v", expiry, notAfter)
+	}
+
+	if !cm.CertValid() {
+		t.Error("CertValid() = false, want true for non-expired cert")
+	}
+}
+
+func TestHTTPClientManager_CertExpired(t *testing.T) {
+	cert := generateTestCert(time.Now().Add(-48*time.Hour), time.Now().Add(-1*time.Hour))
+
+	provider := &mockCertificateProvider{cert: cert}
+	cm := &httpClientManager{
+		certProvider: provider,
+	}
+
+	if cm.CertValid() {
+		t.Error("CertValid() = true, want false for expired cert")
+	}
+}
+
+func TestHTTPClientManager_CertExpiryNoCert(t *testing.T) {
+	provider := &mockCertificateProvider{}
+	cm := &httpClientManager{
+		certProvider: provider,
+	}
+
+	_, err := cm.CertExpiry()
+	if err == nil {
+		t.Error("CertExpiry() should return error when no certificate is available")
+	}
+
+	if cm.CertValid() {
+		t.Error("CertValid() = true, want false when no cert available")
+	}
+}
 
 // TestHTTPClientManager_TimeoutPrecision tests edge cases around floating point precision
 func TestHTTPClientManager_TimeoutPrecision(t *testing.T) {

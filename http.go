@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptrace"
@@ -28,6 +30,7 @@ type httpClientManager struct {
 	currentTimeout time.Duration
 	tlsConfig      *tls.Config
 	apiURL         string
+	certProvider   apitls.CertificateProvider
 
 	// SRV target management
 	targetPool *TargetPool
@@ -62,11 +65,12 @@ func NewHTTPClientManager(certProvider apitls.CertificateProvider, apiURL string
 	targetPool := NewTargetPool(upstreamURL, srvMetrics)
 
 	cm := &httpClientManager{
-		tlsConfig:  tlsConfig,
-		apiURL:     apiURL,
-		targetPool: targetPool,
-		srvTTL:     defaultSRVTTL,
-		stopCh:     make(chan struct{}),
+		tlsConfig:    tlsConfig,
+		apiURL:       apiURL,
+		certProvider: certProvider,
+		targetPool:   targetPool,
+		srvTTL:       defaultSRVTTL,
+		stopCh:       make(chan struct{}),
 	}
 
 	cm.client = &http.Client{}
@@ -172,6 +176,31 @@ func (cm *httpClientManager) GetTargetURL() string {
 // TargetPool returns the SRV target pool for health tracking.
 func (cm *httpClientManager) TargetPool() *TargetPool {
 	return cm.targetPool
+}
+
+// CertExpiry returns the NotAfter time of the current client certificate.
+func (cm *httpClientManager) CertExpiry() (time.Time, error) {
+	cert, err := cm.certProvider.GetClientCertificate(&tls.CertificateRequestInfo{})
+	if err != nil {
+		return time.Time{}, err
+	}
+	if len(cert.Certificate) == 0 {
+		return time.Time{}, fmt.Errorf("no certificate available")
+	}
+	leaf, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return time.Time{}, err
+	}
+	return leaf.NotAfter, nil
+}
+
+// CertValid returns true if the current client certificate is not expired.
+func (cm *httpClientManager) CertValid() bool {
+	expiry, err := cm.CertExpiry()
+	if err != nil {
+		return false
+	}
+	return time.Now().Before(expiry)
 }
 
 // Stop shuts down background goroutines.
